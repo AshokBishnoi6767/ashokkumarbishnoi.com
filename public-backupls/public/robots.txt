@@ -1,6 +1,0 @@
-# ashokkumarbishnoi.com
-User-agent: *
-Allow: /
-Disallow: /404.html
-
-Sitemap: https://ashokkumarbishnoi.com/sitemap.xml
