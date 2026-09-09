@@ -42,6 +42,27 @@ const FIREBASE_WEB_CONFIG = {
   appId: "1:232056650491:web:ec5cf80c29952a063b0e5e",
 };
 
+// SEO: 301 redirects for pre-redesign URLs with a clear equivalent on the
+// current site — mirrors firebase.json's hosting.redirects exactly, so the
+// same behavior is real and testable locally, not just declared for
+// production. URLs with NO clear equivalent (old /work/, /portfolio.html,
+// /services/<old-subpage>/) are deliberately NOT listed here — they 404
+// rather than redirecting to the homepage, per the redirect audit in the
+// final report.
+const LEGACY_REDIRECTS = [
+  { pattern: /^\/start-a-project\/?$/, destination: "/contact/" },
+  { pattern: /^\/tools\/?$/, destination: "/resources/tools-templates/" },
+  { pattern: /^\/insights(\/.*)?\/?$/, destination: "/resources/thought-leadership/" },
+  { pattern: /^\/blog(\/.*)?\/?$/, destination: "/resources/articles/" },
+];
+
+function matchLegacyRedirect(pathname) {
+  for (const { pattern, destination } of LEGACY_REDIRECTS) {
+    if (pattern.test(pathname)) return destination;
+  }
+  return null;
+}
+
 // The ONLY private-API authorization boundary: a verified Firebase ID
 // token whose uid matches the single configured owner. Nothing supplied by
 // the browser (user_id, email, role) is ever trusted — identity comes
@@ -149,6 +170,15 @@ async function requestHandler(req, res) {
   const url = req.url || "/";
 
   try {
+    // SEO: pre-redesign URL redirects, checked before any other routing —
+    // matches how Firebase Hosting evaluates redirects before rewrites.
+    const pathname = url.split("?")[0];
+    const legacyDestination = matchLegacyRedirect(pathname);
+    if (legacyDestination) {
+      res.writeHead(301, { Location: legacyDestination });
+      return res.end();
+    }
+
     // --- Authentication surface: public, but deliberately tiny. ---
     if (req.method === "GET" && url === "/api/auth/config") {
       return sendJson(res, 200, { ...FIREBASE_WEB_CONFIG, ownerConfigured: ownerAccount.isOwnerConfigured() });

@@ -283,6 +283,116 @@ test("GET /dashboard: serves the private dashboard shell", async () => {
   assert.match(text, /Command Center/);
 });
 
+// --- SEO: legacy redirects, sitemap, robots, private-route protection ---
+
+test("SEO: pre-redesign URLs with a clear equivalent 301-redirect, not to the homepage", async () => {
+  const cases = [
+    ["/start-a-project/", "/contact/"],
+    ["/tools/", "/resources/tools-templates/"],
+    ["/insights/", "/resources/thought-leadership/"],
+    ["/insights/traffic-versus-buyers/", "/resources/thought-leadership/"],
+    ["/blog/", "/resources/articles/"],
+    ["/blog/2026/08/22/work-life-integration/", "/resources/articles/"],
+  ];
+  for (const [from, to] of cases) {
+    const res = await fetch(baseUrl + from, { redirect: "manual" });
+    assert.equal(res.status, 301, `${from} should 301`);
+    assert.equal(res.headers.get("location"), to, `${from} should redirect to ${to}`);
+  }
+});
+
+test("SEO: pre-redesign URLs with no clear equivalent 404 rather than redirecting to the homepage", async () => {
+  const cases = ["/work/", "/portfolio.html", "/services/case-studies/"];
+  for (const url of cases) {
+    const res = await fetch(baseUrl + url, { redirect: "manual" });
+    assert.notEqual(res.status, 301, `${url} should not redirect`);
+    assert.notEqual(res.status, 302, `${url} should not redirect`);
+    assert.equal(res.status, 404, `${url} should 404`);
+  }
+});
+
+test("SEO: sitemap.xml is valid, and never contains private/noindex routes", async () => {
+  const res = await fetch(baseUrl + "/sitemap.xml");
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.match(text, /<urlset/);
+  assert.match(text, /<loc>https:\/\/ashokkumarbishnoi\.com\/<\/loc>/);
+  for (const forbidden of ["/dashboard", "/sign-in/", "/api/"]) {
+    assert.equal(text.includes(forbidden), false, `sitemap must not list ${forbidden}`);
+  }
+});
+
+test("SEO: robots.txt disallows private application routes and references the sitemap", async () => {
+  const res = await fetch(baseUrl + "/robots.txt");
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.match(text, /Disallow: \/dashboard/);
+  assert.match(text, /Disallow: \/api\//);
+  assert.match(text, /Sitemap: https:\/\/ashokkumarbishnoi\.com\/sitemap\.xml/);
+});
+
+test("SEO: /sign-in/ is reachable (not blocked by robots.txt) but carries noindex,nofollow", async () => {
+  const res = await fetch(baseUrl + "/sign-in/");
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.match(text, /content="noindex,nofollow" name="robots"/);
+});
+
+test("SEO: every indexable page has a canonical link and a unique meta description", async () => {
+  const pages = ["/", "/services/", "/about/", "/resources/", "/contact/", "/resources/b2b-saas-toronto/", "/resources/b2b-saas-canada/", "/resources/b2b-saas-waterloo-kitchener-cambridge/", "/resources/top-b2b-saas-companies/"];
+  const descriptions = new Set();
+  for (const p of pages) {
+    const res = await fetch(baseUrl + p);
+    const text = await res.text();
+    assert.match(text, /rel="canonical"/, `${p} missing canonical`);
+    const descMatch = text.match(/name="description"/);
+    assert.ok(descMatch, `${p} missing meta description`);
+    const contentMatch = text.match(/content="([^"]*)" name="description"/);
+    assert.ok(contentMatch, `${p} description content unreadable`);
+    assert.equal(descriptions.has(contentMatch[1]), false, `${p} has a duplicate meta description`);
+    descriptions.add(contentMatch[1]);
+  }
+});
+
+test("SEO: the four B2B SaaS cornerstone pages each carry valid BreadcrumbList and FAQPage JSON-LD", async () => {
+  const pages = ["/resources/b2b-saas-waterloo-kitchener-cambridge/", "/resources/b2b-saas-toronto/", "/resources/b2b-saas-canada/", "/resources/top-b2b-saas-companies/"];
+  for (const p of pages) {
+    const res = await fetch(baseUrl + p);
+    assert.equal(res.status, 200);
+    const text = await res.text();
+    const blocks = [...text.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1]));
+    assert.ok(blocks.some((b) => b["@type"] === "BreadcrumbList"), `${p} missing BreadcrumbList`);
+    const faq = blocks.find((b) => b["@type"] === "FAQPage");
+    assert.ok(faq, `${p} missing FAQPage`);
+    assert.ok(faq.mainEntity.length >= 3, `${p} FAQ should have real questions`);
+  }
+});
+
+test("SEO: cornerstone pages are not orphaned — the Resources hub links to all four", async () => {
+  const res = await fetch(baseUrl + "/resources/");
+  const text = await res.text();
+  for (const href of [
+    "/resources/b2b-saas-waterloo-kitchener-cambridge/",
+    "/resources/b2b-saas-toronto/",
+    "/resources/b2b-saas-canada/",
+    "/resources/top-b2b-saas-companies/",
+  ]) {
+    assert.match(text, new RegExp(`href="${href.replace(/\//g, "\\/")}"`), `Resources hub missing link to ${href}`);
+  }
+});
+
+test("SEO: cornerstone pages never claim to be objectively No. 1 / best / leading as a factual statement", async () => {
+  const pages = ["/resources/b2b-saas-toronto/", "/resources/b2b-saas-canada/", "/resources/top-b2b-saas-companies/"];
+  for (const p of pages) {
+    const res = await fetch(baseUrl + p);
+    const text = await res.text();
+    // The literal phrases are allowed only inside the honest "we don't
+    // claim this" framing already written on these pages — this asserts
+    // that framing is present, not merely absent of the phrase.
+    assert.match(text, /no single|isn.t one honest answer|cannot be independently verified/i, `${p} should explicitly disclaim an unverifiable #1\/best claim`);
+  }
+});
+
 // --- Activity/Audit surface ---
 
 test("GET /api/audit: no token is 401 UNAUTHORIZED", async () => {

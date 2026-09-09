@@ -10,6 +10,18 @@
       { "source": "/api/**", "function": "api" },
       { "source": "/dashboard", "function": "api" },
       { "source": "/dashboard/**", "function": "api" }
+    ],
+    "redirects": [
+      { "source": "/start-a-project", "destination": "/contact/", "type": 301 },
+      { "source": "/start-a-project/", "destination": "/contact/", "type": 301 },
+      { "source": "/tools", "destination": "/resources/tools-templates/", "type": 301 },
+      { "source": "/tools/", "destination": "/resources/tools-templates/", "type": 301 },
+      { "source": "/insights", "destination": "/resources/thought-leadership/", "type": 301 },
+      { "source": "/insights/", "destination": "/resources/thought-leadership/", "type": 301 },
+      { "source": "/insights/:slug*", "destination": "/resources/thought-leadership/", "type": 301 },
+      { "source": "/blog", "destination": "/resources/articles/", "type": 301 },
+      { "source": "/blog/", "destination": "/resources/articles/", "type": 301 },
+      { "source": "/blog/:slug*", "destination": "/resources/articles/", "type": 301 }
     ]
   },
   "functions": [

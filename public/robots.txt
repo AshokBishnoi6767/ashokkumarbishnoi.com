@@ -1,3 +1,6 @@
 User-agent: *
 Allow: /
+Disallow: /dashboard
+Disallow: /api/
+
 Sitemap: https://ashokkumarbishnoi.com/sitemap.xml
