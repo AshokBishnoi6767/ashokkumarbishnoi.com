@@ -1,0 +1,21 @@
+{
+  "_notes": [
+    "Machine-readable asset/content manifest, per the site's SEO asset architecture.",
+    "Zero real image or whitepaper assets exist in the repository as of 2026-09-09 — this manifest is a schema definition with an empty entries array, not a catalog of fabricated assets.",
+    "Add one object to `entries` per real asset once it's produced. Fields below match the required schema."
+  ],
+  "schema": {
+    "asset_id": "string, unique, stable",
+    "asset_type": "image | whitepaper | infographic",
+    "filename": "string, matches naming convention in public/assets/images/README.md",
+    "description": "string, human-readable, what the asset actually shows",
+    "primary_keyword": "string",
+    "sitemap_position": "string, e.g. /customer-service-bots/",
+    "page_url": "string, full page URL where the asset appears",
+    "alt_text": "string, required for image type",
+    "format": "webp | png | pdf | svg",
+    "source_file": "string, path to editable source if applicable",
+    "status": "planned | in_production | published"
+  },
+  "entries": []
+}

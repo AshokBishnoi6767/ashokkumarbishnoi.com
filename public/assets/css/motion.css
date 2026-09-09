@@ -195,6 +195,21 @@ a, .btn, .card, .pill, .toc a {
 }
 .frontier[data-stage="flying"]::before { border-color: var(--amber); }
 
+/* Small per-frontier icon, reusing the article-visual concept library
+   (article-visuals.js) so the four stages share one visual system instead
+   of four unrelated illustration styles — "own identity, one system." */
+.frontier-visual {
+  width: 84px;
+  height: 34px;
+  margin: 0 0 10px;
+  opacity: 0.85;
+}
+.frontier-visual svg {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
 @media (prefers-reduced-motion: no-preference) {
   .frontier {
     opacity: 0;
@@ -272,18 +287,22 @@ a, .btn, .card, .pill, .toc a {
 /* ---------- Article visual concepts (article-visuals.js) ---------- */
 
 @media (prefers-reduced-motion: no-preference) {
-  .article-visual .av-node {
+  .article-visual .av-node,
+  .frontier-visual .av-node {
     opacity: 0;
     animation: nodeIn 500ms var(--ease) forwards, nodePulse 3.2s ease-in-out infinite;
   }
-  .article-visual .av-flow {
+  .article-visual .av-flow,
+  .frontier-visual .av-flow {
     animation: flowMove 2.4s ease-in-out infinite;
   }
-  .article-visual .av-spin {
+  .article-visual .av-spin,
+  .frontier-visual .av-spin {
     transform-origin: center;
     animation: spinSlow 6s linear infinite;
   }
-  .article-visual .av-pulse {
+  .article-visual .av-pulse,
+  .frontier-visual .av-pulse {
     animation: nodePulse 2.4s ease-in-out infinite;
   }
 }
@@ -300,4 +319,4 @@ a, .btn, .card, .pill, .toc a {
 
 /* Never let decorative motion cause horizontal overflow. */
 .hero, .hero-trajectory { max-width: 100%; }
-.article-visual { max-width: 100%; overflow: hidden; }
+.article-visual, .frontier-visual { max-width: 100%; overflow: hidden; }

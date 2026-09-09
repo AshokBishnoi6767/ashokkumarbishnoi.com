@@ -46,6 +46,13 @@
   opacity: 0.5;
 }
 
+/* ---------- Infographic presentation component ----------
+   Currently rendering the SVG concept-visual system (see
+   article-visuals.js) — this is the placeholder layer for the 50 approved
+   research infographics, which do not yet exist in this project (verified:
+   zero image files anywhere in the repo). The moment a real infographic
+   image is dropped in, it renders through this exact component — .img and
+   svg children are styled identically, so nothing here needs to change. */
 .article-visual {
   width: 100%;
   aspect-ratio: 16 / 7;
@@ -57,15 +64,58 @@
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
 }
-.article-visual svg {
+.article-visual svg,
+.article-visual img {
   width: 100%;
   height: 100%;
   display: block;
+  object-fit: cover;
 }
 .article-visual.inline {
   aspect-ratio: 16 / 6;
   margin: 40px 0;
+}
+.article-visual-wrap {
+  margin: 8px 0 32px;
+}
+.article-visual-wrap.inline {
+  margin: 40px 0;
+}
+.article-visual-caption {
+  font-family: var(--font-mono, "IBM Plex Mono", ui-monospace, monospace);
+  font-size: 0.78rem;
+  color: #5e6b62;
+  margin-top: 10px;
+  padding-left: 2px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .article-visual-wrap {
+    opacity: 0;
+    transform: translateY(16px) scale(0.99);
+    transition: opacity 620ms cubic-bezier(0.22, 0.61, 0.36, 1), transform 620ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+  .article-visual-wrap.is-visible {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  .article-visual-caption {
+    opacity: 0;
+    transition: opacity 420ms ease 200ms;
+  }
+  .article-visual-wrap.is-visible .article-visual-caption {
+    opacity: 1;
+  }
+}
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .article-visual {
+    transition: transform 320ms cubic-bezier(0.22, 0.61, 0.36, 1);
+  }
+  .article-visual-wrap:hover .article-visual {
+    transform: scale(1.012);
+  }
 }
 
 .article-body {
@@ -152,6 +202,114 @@
   background: #f7f8f4;
 }
 
+/* ---------- Portal CTA system ----------
+   Five consistent levels. The label text itself states where a visitor is
+   going (per the brief's own examples — "EXPLORE THE AI BUYER →", "GO
+   DEEPER: DOWNLOAD THE RESEARCH →"); the visual treatment reinforces which
+   level it is, so the same five colors/weights mean the same thing
+   everywhere on the site. */
+.portal {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-family: var(--font-mono, "IBM Plex Mono", ui-monospace, monospace);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid currentColor;
+  text-decoration: none;
+  cursor: pointer;
+  background: transparent;
+  transition: transform 200ms cubic-bezier(0.22, 0.61, 0.36, 1), background-color 200ms ease, color 200ms ease;
+}
+.portal .portal-arrow {
+  display: inline-block;
+  transition: transform 200ms cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+.portal:hover {
+  transform: translateY(-1px);
+}
+.portal:hover .portal-arrow {
+  transform: translateX(3px);
+}
+.portal:disabled,
+.portal[aria-disabled="true"] {
+  opacity: 0.5;
+  cursor: not-allowed;
+  transform: none;
+}
+.portal:disabled:hover,
+.portal[aria-disabled="true"]:hover {
+  transform: none;
+  background: transparent;
+  color: inherit;
+}
+
+.portal-explore { color: #2f6b4f; }
+.portal-explore:hover { background: #2f6b4f; color: #fff; }
+
+.portal-deeper { color: #171717; }
+.portal-deeper:hover { background: #171717; color: #fff; }
+
+.portal-diagnose { color: #a86a1f; }
+.portal-diagnose:hover { background: #a86a1f; color: #fff; }
+
+.portal-apply { color: #55705f; }
+.portal-apply:hover { background: #55705f; color: #fff; }
+
+.portal-talk {
+  color: #f7f8f4;
+  background: #171717;
+  border-color: #171717;
+}
+.portal-talk:hover {
+  background: #2f6b4f;
+  border-color: #2f6b4f;
+  color: #fff;
+}
+
+.portal-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+}
+
+.talk-to-ashok {
+  max-width: 700px;
+  margin: 56px auto 0;
+  padding: 40px 36px;
+  border-radius: 4px;
+  background: #171717;
+  color: #f7f8f4;
+  text-align: center;
+}
+.talk-to-ashok .eyebrow {
+  color: #9fb3a4;
+  margin-bottom: 14px;
+}
+.talk-to-ashok p.lead {
+  font-family: "Inter Tight", Inter, sans-serif;
+  font-size: clamp(1.2rem, 2.2vw, 1.5rem);
+  line-height: 1.35;
+  letter-spacing: -0.01em;
+  margin: 0 0 26px;
+  color: #f7f8f4;
+}
+.talk-to-ashok .portal-talk {
+  background: #f7f8f4;
+  color: #171717;
+  border-color: #f7f8f4;
+}
+.talk-to-ashok .portal-talk:hover {
+  background: #2f6b4f;
+  border-color: #2f6b4f;
+  color: #fff;
+}
+
 .related-articles {
   max-width: 900px;
   margin: 56px auto 0;
@@ -175,6 +333,19 @@
 }
 .related-articles .card a:hover h4 {
   text-decoration: underline;
+}
+.related-articles .card .portal-explore {
+  margin-top: 10px;
+  font-size: 0.68rem;
+  padding: 6px 12px;
+  pointer-events: none;
+}
+.related-articles .card a:hover .portal-explore {
+  background: #2f6b4f;
+  color: #fff;
+}
+.related-articles .card a:hover .portal-explore .portal-arrow {
+  transform: translateX(3px);
 }
 
 .article-nav-cta {

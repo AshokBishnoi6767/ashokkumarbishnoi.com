@@ -1,7 +1,9 @@
 /*
-  Public Industry 4.0 Navigator widget. Talks only to POST /api/public-ai
-  — never the private endpoint, never sends any credential. Builds its own
-  DOM rather than requiring markup changes on every page.
+  Public Navigator widget — an AI assistant for the site, and a live example
+  of the customer service bots this business builds for clients. Talks only
+  to POST /api/public-ai — never the private endpoint, never sends any
+  credential. Builds its own DOM rather than requiring markup changes on
+  every page.
 */
 (function () {
   "use strict";
@@ -23,7 +25,7 @@
     return id;
   }
 
-  var launcher = el("button", null, "Find Your Frontier");
+  var launcher = el("button", null, "Chat With Us");
   launcher.id = "navigator-launcher";
   launcher.type = "button";
 
@@ -32,8 +34,8 @@
 
   var head = el("div", "nav-widget-head");
   var headText = el("div");
-  headText.appendChild(el("div", "nav-widget-eyebrow", "Industry 4.0 Navigator"));
-  headText.appendChild(el("div", "nav-widget-title", "Find your frontier"));
+  headText.appendChild(el("div", "nav-widget-eyebrow", "AI Assistant"));
+  headText.appendChild(el("div", "nav-widget-title", "Ask about our services"));
   var closeBtn = el("button", "nav-widget-close", "✕");
   closeBtn.type = "button";
   closeBtn.setAttribute("aria-label", "Close");
@@ -41,13 +43,17 @@
   head.appendChild(closeBtn);
 
   var log = el("div", "nav-widget-log");
-  var intro = el("div", "nav-widget-intro", "Tell me where your business is right now, or pick a stage:");
+  var intro = el("div", "nav-widget-intro", "Tell me what your business needs, or pick where to start:");
   var stages = el("div", "nav-widget-stages");
-  ["BUILDING", "ACCELERATING", "ADVANCING", "FLYING"].forEach(function (stage) {
-    var b = el("button", null, stage);
+  [
+    ["Customer service bots", "Tell me about customer service bots for my business."],
+    ["IT services", "Tell me about your IT services."],
+    ["Marketing services", "Tell me about your marketing services."],
+  ].forEach(function (choice) {
+    var b = el("button", null, choice[0]);
     b.type = "button";
     b.addEventListener("click", function () {
-      sendMessage("I think I'm at the " + stage + " stage. What does that mean for me?");
+      sendMessage(choice[1]);
     });
     stages.appendChild(b);
   });
@@ -58,7 +64,7 @@
 
   var form = el("form", "nav-widget-form");
   var textarea = el("textarea");
-  textarea.placeholder = "Ask about Industry 4.0, or describe your situation…";
+  textarea.placeholder = "Ask about customer service bots, IT services, or marketing…";
   textarea.setAttribute("aria-label", "Message");
   var sendBtn = el("button", null, "Ask");
   sendBtn.type = "submit";

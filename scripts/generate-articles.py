@@ -60,7 +60,10 @@ TEMPLATE = """<!DOCTYPE html>
 </div></section>
 
 <section class="section" style="padding-top:0"><div class="wrap">
+<div class="article-visual-wrap">
 <div class="article-visual" data-visual="{visual}" data-visual-label="{visual_label}"></div>
+<p class="article-visual-caption">{visual_label}</p>
+</div>
 </div></section>
 
 <section class="section" style="padding-top:0"><div class="wrap">
@@ -72,12 +75,21 @@ TEMPLATE = """<!DOCTYPE html>
 <div class="eyebrow">Go deeper</div>
 <h3>{whitepaper_title}</h3>
 <p>{whitepaper_teaser}</p>
+<div class="portal-row">
 <span class="status-badge">Whitepaper in production &mdash; not yet available</span>
+<button type="button" class="portal portal-deeper" disabled="" aria-disabled="true">Go deeper: download the research <span class="portal-arrow">&rarr;</span></button>
+</div>
 </div>
 
 <div class="article-nav-cta">
 <p>{navigator_prompt}</p>
-<button type="button" data-open-navigator="">Ask the Navigator &rarr;</button>
+<button type="button" class="portal portal-diagnose" data-open-navigator="">Find where you are <span class="portal-arrow">&rarr;</span></button>
+</div>
+
+<div class="talk-to-ashok">
+<div class="eyebrow">Talk to Ashok</div>
+<p class="lead">Tell me where you are. Tell me where you want to go. We'll figure out the next move.</p>
+<a class="portal portal-talk" href="/contact/">Talk to Ashok <span class="portal-arrow">&rarr;</span></a>
 </div>
 </div></section>
 
@@ -102,7 +114,8 @@ def reading_time(html):
 
 def card(slug, note=None):
     title = TITLES.get(slug, slug)
-    return ('<div class="card"><a href="/resources/{slug}/"><div class="eyebrow">{note}</div><h4>{title}</h4></a></div>'
+    return ('<div class="card"><a href="/resources/{slug}/"><div class="eyebrow">{note}</div><h4>{title}</h4>'
+            '<span class="portal portal-explore">Explore <span class="portal-arrow">&rarr;</span></span></a></div>'
             .format(slug=slug, title=title, note=note or "Thought Leadership"))
 
 def render(a):
@@ -1652,7 +1665,7 @@ ARTICLES.append({
     "whitepaper_title": "The Content Engine",
     "whitepaper_teaser": "What separates a content team that publishes from a content system that compounds — and why the difference is structural, not about effort or talent.",
     "navigator_prompt": "Want a clear-eyed look at whether your content operation is a system or just a publishing schedule?",
-    "related_cards": [card("growth-isnt-a-department-its-a-system"), card("from-content-factory-to-intelligence-engine"), card("the-research-advantage"), card("the-modern-inbound-system")],
+    "related_cards": [card("growth-isnt-a-department-its-a-system"), card("from-content-factory-to-intelligence-engine"), card("the-research-advantage"), card("the-b2b-content-gap")],
     "body_html": """
 <p>A content team that's publishing consistently, hitting its calendar, and still not growing its influence has usually been diagnosed incorrectly. The instinct is to conclude the team needs to publish more, or publish better. Often the real constraint is neither — it's that content is being produced as a series of isolated pieces, with no system connecting what's learned from one piece to what gets made next.</p>
 
@@ -1789,7 +1802,7 @@ ARTICLES.append({
     "whitepaper_title": "The B2B Content Gap",
     "whitepaper_teaser": "Why the real gap in most B2B content categories is conviction, not volume, and what content built around a genuine point of view actually requires.",
     "navigator_prompt": "Trying to figure out where your content is hedging instead of committing to a real point of view?",
-    "related_cards": [card("from-content-factory-to-intelligence-engine"), card("thought-leadership-that-moves-buyers"), card("the-end-of-generic-seo"), card("b2b-saas-waterloo-kitchener-cambridge", "B2B SaaS Guide")],
+    "related_cards": [card("the-content-engine"), card("the-research-advantage"), card("the-end-of-generic-seo"), card("thought-leadership-that-moves-buyers")],
     "body_html": """
 <p>Search almost any B2B topic and the results are dense with content — guides, comparisons, explainers, listicles. By any reasonable measure, there's no shortage. And yet most buyers in most categories would describe their experience of that content as unhelpful, forgettable, or interchangeable. The gap isn't volume. It's that most of that content carefully avoids committing to anything specific enough to actually be useful.</p>
 
@@ -2145,7 +2158,7 @@ ARTICLES.append({
     "whitepaper_title": "The Data-to-Decision Gap",
     "whitepaper_teaser": "Why dashboards so often fail to change behavior even when they're accurate and well-designed, and what closing the gap between seeing data and acting on it actually requires.",
     "navigator_prompt": "Want to figure out why a dashboard isn't changing behavior the way it should?",
-    "related_cards": [card("the-decision-ready-business"), card("from-dashboard-to-decision"), card("the-measurement-problem"), card("the-feedback-loop")],
+    "related_cards": [card("the-decision-ready-business"), card("from-dashboard-to-decision"), card("the-measurement-problem"), card("the-experimentation-advantage")],
     "body_html": """
 <p>A team builds a dashboard, populates it with genuinely accurate, relevant data, and reviews it faithfully every week. Months later, behavior hasn't meaningfully changed — the same decisions get made the same way, the numbers on the dashboard notwithstanding. The instinct is to blame the dashboard: wrong metrics, wrong visualization, needs a redesign. Often the dashboard was never the actual problem. The gap is in what's supposed to happen in the moment after someone looks at it.</p>
 
@@ -2407,7 +2420,7 @@ ARTICLES.append({
     "whitepaper_title": "The Experimentation Advantage",
     "whitepaper_teaser": "Why the speed and clarity of learning from an experiment matters more than the raw number of experiments run, and how to design experiments that actually produce fast answers.",
     "navigator_prompt": "Want a second opinion on whether your experimentation program is producing volume or actual speed of learning?",
-    "related_cards": [card("the-feedback-loop"), card("the-measurement-problem"), card("the-company-that-decides-first-usually-wins"), card("think-build-measure-improve")],
+    "related_cards": [card("the-feedback-loop"), card("the-measurement-problem"), card("the-data-to-decision-gap"), card("think-build-measure-improve")],
     "body_html": """
 <p>"We run a lot of experiments" gets treated as a badge of a sophisticated, fast-moving organization. It's an incomplete metric. A company running many experiments that each take months to produce an unclear result isn't actually learning faster than a company running fewer experiments that each produce a fast, decisive answer. The real advantage was never experiment volume. It's the speed and clarity of the learning each experiment produces.</p>
 

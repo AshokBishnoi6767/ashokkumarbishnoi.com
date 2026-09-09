@@ -1,11 +1,13 @@
-/* Visual concept system for long-form Resources content. Each named
-   concept is a small, purposeful SVG composition in the site's existing
-   palette — not decoration, not stock imagery, not a random thumbnail.
-   Concepts are reused across articles by theme (several articles sharing
-   "friction" or "decision-map" is intentional, the same way a publication
-   reuses a limited set of section icons). This is the placeholder layer
-   for the 50 approved visual masters — when those are provided, each
-   [data-visual] target here is exactly where a real image would drop in.
+/* Visual concept system, shared by long-form Resources content and the
+   homepage's Four Frontiers. Each named concept is a small, purposeful SVG
+   composition in the site's existing palette — not decoration, not stock
+   imagery, not a random thumbnail. Concepts are reused by theme (several
+   articles sharing "friction" or "decision-map" is intentional, the same
+   way a publication reuses a limited set of section icons; the Frontiers
+   reuse the same four for the same reason — one visual system, four
+   inflections of it). This is the placeholder layer for the 50 approved
+   research infographics — when those are provided, each [data-visual]
+   target here is exactly where a real image would drop in.
    Zero dependencies, respects prefers-reduced-motion. */
 (function () {
   "use strict";
@@ -133,20 +135,61 @@
   };
 
   function render() {
-    var targets = document.querySelectorAll(".article-visual[data-visual]");
+    var targets = document.querySelectorAll("[data-visual]");
     targets.forEach(function (el) {
       var key = el.getAttribute("data-visual");
       var fn = CONCEPTS[key];
       if (!fn) return;
       el.innerHTML = fn();
-      el.setAttribute("role", "img");
-      el.setAttribute("aria-label", el.getAttribute("data-visual-label") || "");
+      var label = el.getAttribute("data-visual-label");
+      if (label) {
+        el.setAttribute("role", "img");
+        el.setAttribute("aria-label", label);
+      } else {
+        // No label means the visual is pure reinforcement of text that's
+        // already on the page (e.g. the Four Frontiers icons) — decorative,
+        // so it's hidden from assistive tech rather than read out twice.
+        el.setAttribute("aria-hidden", "true");
+      }
+    });
+  }
+
+  // Scroll reveal for the infographic-presentation component
+  // (.article-visual-wrap / .article-visual-caption in article.css). Same
+  // IntersectionObserver pattern as motion.js's initSectionReveal — one
+  // observer, unobserve once revealed, no-op entirely under reduced motion
+  // or without IntersectionObserver (content is simply visible by default,
+  // see the CSS: the opacity:0 start state only applies inside the
+  // prefers-reduced-motion:no-preference media query).
+  function initVisualReveal() {
+    var reduceMotion = window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    var wraps = document.querySelectorAll(".article-visual-wrap");
+    if (!wraps.length) return;
+    if (reduceMotion || !("IntersectionObserver" in window)) {
+      wraps.forEach(function (el) {
+        el.classList.add("is-visible");
+      });
+      return;
+    }
+    var io = new IntersectionObserver(
+      function (entries) {
+        entries.forEach(function (entry) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("is-visible");
+            io.unobserve(entry.target);
+          }
+        });
+      },
+      { threshold: 0.15, rootMargin: "0px 0px -8% 0px" }
+    );
+    wraps.forEach(function (el) {
+      io.observe(el);
     });
   }
 
   // "Ask the Navigator" CTA on article pages opens the existing public
-  // Industry 4.0 Navigator widget (agent-widget.js) rather than linking to
-  // a separate page — the Navigator IS the widget already on every page.
+  // Navigator widget (agent-widget.js) rather than linking to a separate
+  // page — the Navigator IS the widget already on every page.
   function initNavigatorCtas() {
     var buttons = document.querySelectorAll("[data-open-navigator]");
     if (!buttons.length) return;
@@ -160,6 +203,7 @@
 
   function init() {
     render();
+    initVisualReveal();
     initNavigatorCtas();
   }
 
