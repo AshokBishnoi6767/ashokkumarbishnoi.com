@@ -284,6 +284,14 @@
         addMessage("agent", data.reply);
         return;
       }
+      if (data.status === "MEMORY_STORED") {
+        addMessage("agent", data.reply, "memory");
+        return;
+      }
+      if (data.status === "CLARIFICATION_NEEDED") {
+        addMessage("agent", data.reply, "clarification");
+        return;
+      }
       if (data.status === "ACTION") {
         var action = data.result.action;
         var summary;
@@ -482,28 +490,55 @@
           el.innerHTML = '<div class="empty-state">Could not load memory.</div>';
           return;
         }
-        var records = res.data.memory;
+        var records = res.data.memory.slice().sort(function (a, b) {
+          return a.created_at < b.created_at ? 1 : -1;
+        });
         if (records.length === 0) {
           el.innerHTML =
-            '<div class="empty-state"><strong>No memory records yet.</strong>Conversations and the audit trail persist to disk and survive a restart. Structured long-term memory (facts, preferences, learned patterns) is a real storage layer with nothing written to it yet — nothing here is fabricated.</div>';
+            '<div class="empty-state"><strong>No memory records yet.</strong>Conversations and the audit trail persist to disk and survive a restart. Tell the Agent a preference ("I prefer...") or a decision ("we decided...") and it will appear here — nothing on this page is fabricated.</div>';
           return;
         }
         el.innerHTML = records
           .map(function (r) {
+            var supersededTag = r.status === "superseded" ? '<span class="tag">SUPERSEDED</span> ' : "";
             return (
-              '<div class="memory-row"><div class="content">' +
+              '<div class="memory-row' +
+              (r.status === "superseded" ? " superseded" : "") +
+              '" data-memory-class="' +
+              escapeHtml(r.memory_class) +
+              '" data-memory-id="' +
+              escapeHtml(r.memory_id) +
+              '"><div class="content">' +
+              supersededTag +
               escapeHtml(r.content) +
               '</div><div class="meta">' +
+              escapeHtml(r.memory_class) +
+              " · " +
               escapeHtml(r.type) +
               " · " +
               escapeHtml(r.truth_state) +
               (r.confidence != null ? " · confidence " + escapeHtml(r.confidence) : "") +
               " · source: " +
               escapeHtml(r.source) +
-              "</div></div>"
+              (r.source_reference ? " (" + escapeHtml(r.source_reference) + ")" : "") +
+              " · " +
+              escapeHtml(r.created_at) +
+              '</div><button class="forget-btn" type="button">Forget</button></div>'
             );
           })
           .join("");
+
+        el.querySelectorAll(".forget-btn").forEach(function (btn) {
+          btn.addEventListener("click", function () {
+            var row = btn.closest(".memory-row");
+            btn.disabled = true;
+            apiFetch("/api/memory/" + encodeURIComponent(row.dataset.memoryClass) + "/" + encodeURIComponent(row.dataset.memoryId), { method: "DELETE" })
+              .then(render)
+              .catch(function () {
+                btn.disabled = false;
+              });
+          });
+        });
       });
     }
 

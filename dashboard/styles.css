@@ -344,6 +344,19 @@ button {
   font-size: 12.5px;
 }
 
+.msg.memory .msg-body {
+  background: var(--green-soft);
+  color: var(--charcoal);
+  border-left: 3px solid var(--green);
+}
+
+.msg.clarification .msg-body {
+  background: var(--paper);
+  border: 1px dashed var(--border-strong);
+  color: var(--graphite);
+  font-style: italic;
+}
+
 .agent-status {
   font-family: var(--font-mono);
   font-size: 12px;
@@ -593,6 +606,34 @@ button {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--graphite-soft);
+}
+
+.memory-row {
+  position: relative;
+  padding-right: 90px;
+}
+
+.memory-row.superseded {
+  opacity: 0.55;
+}
+
+.memory-row .forget-btn {
+  position: absolute;
+  top: 12px;
+  right: 14px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+  padding: 4px 9px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--paper);
+  color: var(--danger);
+  cursor: pointer;
+}
+
+.memory-row .forget-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
 }
 
 .home-status {

@@ -46,6 +46,35 @@ function query(memoryClass, predicate = () => true) {
   return Array.from(stores.get(memoryClass).values()).filter(predicate);
 }
 
+// Patches an existing record in place (e.g. status: "superseded" when a
+// correction replaces it) rather than deleting it — supersession preserves
+// history/provenance; only an explicit forget() removes a record outright.
+function update(memoryClass, memoryId, patch) {
+  if (!stores.has(memoryClass)) {
+    throw new TypeError(`Unknown memory class: ${memoryClass}`);
+  }
+  const map = stores.get(memoryClass);
+  const existing = map.get(memoryId);
+  if (!existing) return null;
+  const updated = { ...existing, ...patch, updated_at: new Date().toISOString() };
+  map.set(memoryId, updated);
+  persist(memoryClass);
+  return updated;
+}
+
+// The owner's explicit "remove this" — distinct from supersession, which
+// keeps the old record for provenance. Returns false if nothing existed to
+// remove, true if a record was actually deleted.
+function forget(memoryClass, memoryId) {
+  if (!stores.has(memoryClass)) {
+    throw new TypeError(`Unknown memory class: ${memoryClass}`);
+  }
+  const map = stores.get(memoryClass);
+  const existed = map.delete(memoryId);
+  if (existed) persist(memoryClass);
+  return existed;
+}
+
 function _reset() {
   for (const [memoryClass, map] of stores.entries()) {
     map.clear();
@@ -53,4 +82,4 @@ function _reset() {
   }
 }
 
-module.exports = { remember, recall, query, _reset };
+module.exports = { remember, recall, query, update, forget, _reset };

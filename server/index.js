@@ -148,6 +148,7 @@ async function requestHandler(req, res) {
         timezone: typeof body.timezone === "string" ? body.timezone : null,
         confirmed: body.confirmed === true,
         testScenario: typeof body.testScenario === "string" ? body.testScenario : null,
+        attachments: Array.isArray(body.attachments) ? body.attachments : [],
       });
       logger.info("private_ai_request", { correlationId, sessionId, status: result.status });
       return sendJson(res, 200, { ...result, sessionId });
@@ -211,8 +212,29 @@ async function requestHandler(req, res) {
       if (!isAuthorizedPrivateRequest(req)) {
         return sendJson(res, 401, { status: "UNAUTHORIZED", reason: "Missing or invalid bearer token." });
       }
-      const records = Object.values(MemoryClass).flatMap((memoryClass) => memoryStore.query(memoryClass, () => true));
+      const records = Object.values(MemoryClass).flatMap((memoryClass) =>
+        memoryStore.query(memoryClass, () => true).map((record) => ({ ...record, memory_class: memoryClass }))
+      );
       return sendJson(res, 200, { memory: records });
+    }
+
+    // The owner's explicit "remove this" — see learning-core/memory/store.js
+    // forget(): distinct from a correction's supersession, which keeps the
+    // old record for provenance. This deletes it outright.
+    const memoryDeleteMatch = req.method === "DELETE" && url.match(/^\/api\/memory\/([^/?]+)\/([^/?]+)$/);
+    if (memoryDeleteMatch) {
+      if (!isAuthorizedPrivateRequest(req)) {
+        return sendJson(res, 401, { status: "UNAUTHORIZED", reason: "Missing or invalid bearer token." });
+      }
+      const memoryClass = decodeURIComponent(memoryDeleteMatch[1]);
+      const memoryId = decodeURIComponent(memoryDeleteMatch[2]);
+      if (!MemoryClass[memoryClass]) {
+        return sendJson(res, 400, { status: "INVALID_REQUEST", reason: `Unknown memory class: ${memoryClass}` });
+      }
+      const deleted = memoryStore.forget(memoryClass, memoryId);
+      logger.info("memory_forget", { correlationId, memoryClass, memoryId, deleted });
+      if (!deleted) return sendJson(res, 404, { status: "NOT_FOUND" });
+      return sendJson(res, 200, { status: "DELETED" });
     }
 
     if (url === "/dashboard" || url.startsWith("/dashboard/") || url.startsWith("/dashboard?")) {

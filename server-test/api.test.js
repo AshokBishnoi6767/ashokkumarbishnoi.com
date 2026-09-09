@@ -313,6 +313,73 @@ test("GET /api/memory: an authorized request returns a structured (possibly empt
   assert.ok(Array.isArray(body.memory));
 });
 
+// --- Personal Intelligence Layer, through the real HTTP endpoint ---
+
+test("POST /api/ai: a stated preference is stored as real memory and appears via GET /api/memory", async () => {
+  const res = await post("/api/ai", { message: "I prefer terse replies over here.", sessionId: "pi-1" }, authHeader());
+  const body = await res.json();
+  assert.equal(body.status, "MEMORY_STORED");
+  assert.equal(body.memory_class, "PREFERENCE");
+
+  const memRes = await get("/api/memory", authHeader());
+  const memBody = await memRes.json();
+  assert.ok(memBody.memory.some((m) => m.memory_id === body.record.memory_id && m.content === "terse replies over here"));
+});
+
+test("POST /api/ai: an ambiguous message asks for clarification through the real endpoint, never guesses", async () => {
+  const res = await post("/api/ai", { message: "Change that.", sessionId: "pi-2" }, authHeader());
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.status, "CLARIFICATION_NEEDED");
+});
+
+test("POST /api/ai: an image attachment is normalized into separate observation/inference memory through the real endpoint", async () => {
+  const res = await post(
+    "/api/ai",
+    {
+      message: "Here's a screenshot.",
+      sessionId: "pi-3",
+      attachments: [{ modality: "IMAGE", observation: "Shows a green checkmark.", inference: "The deploy likely succeeded.", reference: "shot-1" }],
+    },
+    authHeader()
+  );
+  const body = await res.json();
+  assert.equal(body.attachments_stored, 2);
+
+  const memRes = await get("/api/memory", authHeader());
+  const memBody = await memRes.json();
+  assert.ok(memBody.memory.some((m) => m.content.includes("green checkmark") && m.truth_state === "KNOWN"));
+  assert.ok(memBody.memory.some((m) => m.content.includes("deploy likely succeeded") && m.truth_state === "HYPOTHESIS"));
+});
+
+test("DELETE /api/memory/:class/:id: no token is 401 UNAUTHORIZED", async () => {
+  const res = await fetch(baseUrl + "/api/memory/PREFERENCE/whatever", { method: "DELETE" });
+  assert.equal(res.status, 401);
+});
+
+test("DELETE /api/memory/:class/:id: removes a real memory record, and it no longer appears in GET /api/memory", async () => {
+  const createRes = await post("/api/ai", { message: "I prefer short subject lines.", sessionId: "pi-4" }, authHeader());
+  const createBody = await createRes.json();
+  const { memory_id } = createBody.record;
+
+  const delRes = await fetch(baseUrl + `/api/memory/PREFERENCE/${memory_id}`, { method: "DELETE", headers: authHeader() });
+  assert.equal(delRes.status, 200);
+
+  const memRes = await get("/api/memory", authHeader());
+  const memBody = await memRes.json();
+  assert.equal(memBody.memory.some((m) => m.memory_id === memory_id), false);
+});
+
+test("DELETE /api/memory/:class/:id: deleting an unknown id is 404 NOT_FOUND", async () => {
+  const res = await fetch(baseUrl + "/api/memory/PREFERENCE/does-not-exist", { method: "DELETE", headers: authHeader() });
+  assert.equal(res.status, 404);
+});
+
+test("DELETE /api/memory/:class/:id: an unknown memory class is 400 INVALID_REQUEST", async () => {
+  const res = await fetch(baseUrl + "/api/memory/NOT_A_CLASS/whatever", { method: "DELETE", headers: authHeader() });
+  assert.equal(res.status, 400);
+});
+
 // --- Honest-failure regression: a real user, with no calendar credential
 // connected at all, must never be shown a fake "waiting for your approval"
 // action for something that was actually blocked earlier, at authorization.
