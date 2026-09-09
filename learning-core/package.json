@@ -3,7 +3,7 @@
   "private": true,
   "description": "Phase 1 foundation for Ashok's Personal AI Operating System. Zero external dependencies, no network calls, no credentials.",
   "scripts": {
-    "test": "node --test",
+    "test": "NODE_ENV=test node --test",
     "demo:integration": "node integration/demo/run-demo.js"
   }
 }

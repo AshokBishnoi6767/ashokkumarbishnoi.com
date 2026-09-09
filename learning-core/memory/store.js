@@ -2,13 +2,25 @@
 
 const { MemoryClass } = require("../shared/constants");
 const { createMemoryRecord } = require("./types");
+const fileStore = require("../persistence/fileStore");
 
-// In-memory only for Phase 1 — deliberately, since the Firestore-vs-other
-// decision for persistent storage is still open (see prior architecture
-// audit). One Map per memory class keeps classes from mixing into a single
-// undifferentiated store, matching the same shape a Firestore collection
-// per class would take later.
-const stores = new Map(Object.values(MemoryClass).map((cls) => [cls, new Map()]));
+// One JSON collection per memory class, matching the shape a Firestore
+// collection per class would take later. Each class's Map is a read cache
+// populated from disk at load time; fileStore is the source of truth, so
+// records survive a process restart instead of living only for the current
+// process's lifetime.
+const COLLECTION_PREFIX = "memory_";
+
+function loadClass(memoryClass) {
+  const raw = fileStore.load(COLLECTION_PREFIX + memoryClass, []);
+  return new Map(raw.map((record) => [record.memory_id, record]));
+}
+
+const stores = new Map(Object.values(MemoryClass).map((cls) => [cls, loadClass(cls)]));
+
+function persist(memoryClass) {
+  fileStore.save(COLLECTION_PREFIX + memoryClass, Array.from(stores.get(memoryClass).values()));
+}
 
 function remember(memoryClass, fields) {
   if (!stores.has(memoryClass)) {
@@ -16,6 +28,7 @@ function remember(memoryClass, fields) {
   }
   const record = createMemoryRecord(fields);
   stores.get(memoryClass).set(record.memory_id, record);
+  persist(memoryClass);
   return record;
 }
 
@@ -34,7 +47,10 @@ function query(memoryClass, predicate = () => true) {
 }
 
 function _reset() {
-  for (const map of stores.values()) map.clear();
+  for (const [memoryClass, map] of stores.entries()) {
+    map.clear();
+    persist(memoryClass);
+  }
 }
 
 module.exports = { remember, recall, query, _reset };

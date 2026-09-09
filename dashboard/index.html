@@ -100,7 +100,7 @@
     <section class="section" id="section-knowledge">
       <div class="section-eyebrow">Memory</div>
       <h1 class="section-title">Knowledge</h1>
-      <div class="empty-state"><strong>No persistent memory yet.</strong>Conversations exist only in-memory for this process — see the final report for the Firestore migration path.</div>
+      <div class="empty-state"><strong>Conversations and audit history persist to disk and survive a server restart.</strong>Structured long-term memory (facts, preferences, learned patterns) is not populated automatically yet — the storage layer exists (see learning-core/memory) but nothing writes to it from a real conversation in this milestone.</div>
     </section>
 
     <section class="section" id="section-automations">
