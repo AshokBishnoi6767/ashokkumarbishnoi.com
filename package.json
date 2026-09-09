@@ -1,0 +1,9 @@
+{
+  "name": "ashok-personal-ai",
+  "private": true,
+  "description": "Local application runtime: server, private dashboard, and public site AI agent. Zero external dependencies.",
+  "scripts": {
+    "start": "node server/index.js",
+    "test": "node --test"
+  }
+}

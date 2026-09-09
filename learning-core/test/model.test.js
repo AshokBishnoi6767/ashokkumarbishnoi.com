@@ -26,9 +26,9 @@ test("model: missing provider is reported explicitly, never silently substituted
   assert.equal(reason, "NO_PROVIDER_CONNECTED");
 });
 
-test("model: provider failure becomes an observable FAILED result, not a crash", () => {
+test("model: provider failure becomes an observable FAILED result, not a crash", async () => {
   const throwingProvider = { invoke: () => { throw new Error("upstream timeout"); } };
-  const result = safeInvoke(throwingProvider, { prompt: "hi" });
+  const result = await safeInvoke(throwingProvider, { prompt: "hi" });
   assert.equal(result.status, "FAILED");
   assert.match(result.reason, /upstream timeout/);
 });

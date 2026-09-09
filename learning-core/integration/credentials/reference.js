@@ -18,6 +18,7 @@ const SOURCES = new Map([
   // a refresh-token flow this milestone does not implement — see the
   // Google Calendar connector's authenticate() for the exact boundary.
   ["google_calendar", { envVar: "GOOGLE_CALENDAR_ACCESS_TOKEN", storage: "environment" }],
+  ["anthropic", { envVar: "ANTHROPIC_API_KEY", storage: "environment" }],
 ]);
 
 function isAvailable(toolId) {

@@ -1,0 +1,187 @@
+/* Public Industry 4.0 Navigator widget. Matches the existing site's
+   palette/shape language (see styles.css) rather than introducing a new
+   visual system. */
+#navigator-launcher {
+  position: fixed;
+  right: 22px;
+  bottom: 22px;
+  z-index: 40;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 13px 20px;
+  border: 1px solid #18211d;
+  border-radius: 999px;
+  background: #18211d;
+  color: #fff;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  font-weight: 700;
+  font-size: 0.92rem;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(24, 33, 29, 0.18);
+}
+
+#navigator-launcher:hover {
+  background: #2a362f;
+}
+
+#navigator-panel {
+  position: fixed;
+  right: 22px;
+  bottom: 84px;
+  z-index: 40;
+  width: min(380px, calc(100vw - 44px));
+  height: min(560px, calc(100vh - 140px));
+  background: #fff;
+  border: 1px solid #d8e0d8;
+  border-radius: 20px;
+  box-shadow: 0 20px 50px rgba(24, 33, 29, 0.16);
+  display: none;
+  flex-direction: column;
+  overflow: hidden;
+  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+#navigator-panel.open {
+  display: flex;
+}
+
+.nav-widget-head {
+  padding: 16px 18px;
+  border-bottom: 1px solid #edf2eb;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.nav-widget-eyebrow {
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  font-size: 0.68rem;
+  font-weight: 800;
+  color: #55705f;
+}
+
+.nav-widget-title {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  margin-top: 2px;
+}
+
+.nav-widget-close {
+  border: none;
+  background: none;
+  font-size: 1.1rem;
+  cursor: pointer;
+  color: #18211d;
+  line-height: 1;
+}
+
+.nav-widget-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 16px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  font-size: 0.92rem;
+}
+
+.nav-widget-intro {
+  color: #5e6b62;
+  font-size: 0.9rem;
+}
+
+.nav-widget-stages {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.nav-widget-stages button {
+  border: 1px solid #ccd7cd;
+  border-radius: 999px;
+  padding: 6px 11px;
+  background: #fff;
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.nav-widget-msg {
+  max-width: 88%;
+  padding: 9px 12px;
+  border-radius: 14px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+}
+
+.nav-widget-msg.user {
+  align-self: flex-end;
+  background: #18211d;
+  color: #fff;
+}
+
+.nav-widget-msg.agent {
+  align-self: flex-start;
+  background: #edf2eb;
+  color: #18211d;
+}
+
+.nav-widget-msg.error {
+  align-self: flex-start;
+  background: #f7e9e4;
+  color: #7a3a2a;
+}
+
+.nav-widget-status {
+  font-size: 0.78rem;
+  color: #6b8271;
+  padding: 0 18px 6px;
+  min-height: 14px;
+}
+
+.nav-widget-form {
+  display: flex;
+  gap: 8px;
+  padding: 12px;
+  border-top: 1px solid #edf2eb;
+}
+
+.nav-widget-form textarea {
+  flex: 1;
+  resize: none;
+  border: 1px solid #ccd6cd;
+  border-radius: 12px;
+  padding: 9px 11px;
+  font: inherit;
+  min-height: 40px;
+  max-height: 100px;
+}
+
+.nav-widget-form button {
+  border: none;
+  border-radius: 999px;
+  background: #18211d;
+  color: #fff;
+  padding: 0 16px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.nav-widget-form button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+@media (max-width: 480px) {
+  #navigator-panel {
+    right: 12px;
+    left: 12px;
+    width: auto;
+  }
+  #navigator-launcher {
+    right: 12px;
+    bottom: 12px;
+  }
+}

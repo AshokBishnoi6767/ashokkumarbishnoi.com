@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Command Center | Ashok Kumar Bishnoi</title>
+<meta name="robots" content="noindex,nofollow" />
+<link rel="stylesheet" href="/dashboard/styles.css" />
+</head>
+<body>
+
+<div class="gate" id="gate">
+  <div class="gate-card">
+    <div class="gate-eyebrow">Private</div>
+    <h1 class="gate-title">Enter access token</h1>
+    <input type="password" id="gate-token" placeholder="Access token" autocomplete="off" />
+    <button id="gate-submit">Enter</button>
+    <div class="gate-error" id="gate-error">That token was rejected.</div>
+  </div>
+</div>
+
+<div class="app" id="app">
+  <aside class="sidebar">
+    <div class="brand">Ashok Kumar Bishnoi</div>
+    <div class="brand-sub">Command Center</div>
+    <ul class="nav" id="nav">
+      <li><button data-section="home"><span class="num">01</span><span>Home</span></button></li>
+      <li><button data-section="agent"><span class="num">02</span><span>AI Agent</span></button></li>
+      <li><button data-section="projects"><span class="num">03</span><span>Projects</span></button></li>
+      <li><button data-section="tasks"><span class="num">04</span><span>Tasks</span></button></li>
+      <li><button data-section="calendar"><span class="num">05</span><span>Calendar</span></button></li>
+      <li><button data-section="contacts"><span class="num">06</span><span>Contacts</span></button></li>
+      <li><button data-section="content"><span class="num">07</span><span>Content</span></button></li>
+      <li><button data-section="knowledge"><span class="num">08</span><span>Knowledge</span></button></li>
+      <li><button data-section="automations"><span class="num">09</span><span>Automations</span></button></li>
+      <li><button data-section="analytics"><span class="num">10</span><span>Analytics</span></button></li>
+      <li><button data-section="integrations"><span class="num">11</span><span>Integrations</span></button></li>
+      <li><button data-section="settings"><span class="num">12</span><span>Settings</span></button></li>
+    </ul>
+    <div class="sidebar-foot">v0.1 · local runtime</div>
+  </aside>
+
+  <main class="main">
+
+    <section class="section" id="section-home">
+      <div class="section-eyebrow">Overview</div>
+      <h1 class="section-title">Your command center.</h1>
+      <div class="empty-state">
+        <strong>Nothing to report yet.</strong>
+        Home will summarize what needs your attention once real tools are connected. For now, start with AI Agent.
+        <div class="note">No integrations connected — see Integrations.</div>
+      </div>
+    </section>
+
+    <section class="section" id="section-agent">
+      <div class="section-eyebrow">Primary</div>
+      <h1 class="section-title">AI Agent</h1>
+      <div class="agent">
+        <div class="agent-log" id="agent-log">
+          <div class="agent-empty" id="agent-empty">Nothing yet. Ask something, or try:<br />"Create an investor meeting tomorrow at 2 PM."</div>
+        </div>
+        <div class="agent-status" id="agent-status"></div>
+        <form class="agent-input-row" id="agent-form">
+          <textarea id="agent-input" placeholder="Message your AI agent…" rows="1" aria-label="Message"></textarea>
+          <button type="submit" id="agent-send">Send</button>
+        </form>
+      </div>
+    </section>
+
+    <section class="section" id="section-projects">
+      <div class="section-eyebrow">Work</div>
+      <h1 class="section-title">Projects</h1>
+      <div class="empty-state"><strong>No projects yet.</strong>Projects will appear here once you create or import one. Not built in this milestone.</div>
+    </section>
+
+    <section class="section" id="section-tasks">
+      <div class="section-eyebrow">Work</div>
+      <h1 class="section-title">Tasks</h1>
+      <div class="empty-state"><strong>No tasks yet.</strong>Task tracking is not built in this milestone.</div>
+    </section>
+
+    <section class="section" id="section-calendar">
+      <div class="section-eyebrow">Schedule</div>
+      <h1 class="section-title">Calendar</h1>
+      <div class="empty-state"><strong>No calendar connected.</strong>Google Calendar is wired at the code level but has no authorized credential yet — see Integrations. Ask the AI Agent to create a meeting to exercise the deterministic test calendar.</div>
+    </section>
+
+    <section class="section" id="section-contacts">
+      <div class="section-eyebrow">Relationships</div>
+      <h1 class="section-title">Contacts</h1>
+      <div class="empty-state"><strong>No CRM connected.</strong>Not built in this milestone.</div>
+    </section>
+
+    <section class="section" id="section-content">
+      <div class="section-eyebrow">Output</div>
+      <h1 class="section-title">Content</h1>
+      <div class="empty-state"><strong>Nothing drafted yet.</strong>Not built in this milestone.</div>
+    </section>
+
+    <section class="section" id="section-knowledge">
+      <div class="section-eyebrow">Memory</div>
+      <h1 class="section-title">Knowledge</h1>
+      <div class="empty-state"><strong>No persistent memory yet.</strong>Conversations exist only in-memory for this process — see the final report for the Firestore migration path.</div>
+    </section>
+
+    <section class="section" id="section-automations">
+      <div class="section-eyebrow">Systems</div>
+      <h1 class="section-title">Automations</h1>
+      <div class="empty-state"><strong>No workflows yet.</strong>The workflow engine is not built in this milestone.</div>
+    </section>
+
+    <section class="section" id="section-analytics">
+      <div class="section-eyebrow">Signal</div>
+      <h1 class="section-title">Analytics</h1>
+      <div class="empty-state"><strong>No analytics connected.</strong>GA4 / Search Console are not wired in this milestone.</div>
+    </section>
+
+    <section class="section" id="section-integrations">
+      <div class="section-eyebrow">Control layer</div>
+      <h1 class="section-title">Integrations</h1>
+      <div id="integrations-list" class="empty-state">Loading…</div>
+    </section>
+
+    <section class="section" id="section-settings">
+      <div class="section-eyebrow">Configuration</div>
+      <h1 class="section-title">Settings</h1>
+      <div class="empty-state">
+        <strong>Access token</strong>
+        Stored only in this browser's local storage.
+        <div class="note"><button id="forget-token" style="font-family:inherit;background:none;border:1px solid var(--border-strong);border-radius:3px;padding:6px 10px;cursor:pointer;">Forget token</button></div>
+      </div>
+    </section>
+
+  </main>
+</div>
+
+<script src="/dashboard/app.js"></script>
+</body>
+</html>
