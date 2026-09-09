@@ -1,13 +1,20 @@
 <!DOCTYPE html>
 
-<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Sign in | Ashok Kumar Bishnoi</title><meta content="noindex,nofollow" name="robots"/><link href="/styles.css" rel="stylesheet"/><style>
-.auth-card{max-width:420px;margin:0 auto;padding:36px;border:1px solid #d8e0d8;border-radius:20px;background:#fff}
-.auth-status{min-height:20px;font-size:.9rem;margin-top:4px}
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Sign in | Ashok Kumar Bishnoi</title><meta content="noindex,nofollow" name="robots"/><link href="/styles.css" rel="stylesheet"/><link href="/assets/css/motion.css" rel="stylesheet"/><style>
+.auth-card{max-width:420px;margin:0 auto;padding:36px;border:1px solid #d8e0d8;border-radius:20px;background:#fff;transition:box-shadow 460ms cubic-bezier(.22,.61,.36,1)}
+.auth-card:focus-within{box-shadow:0 20px 44px -28px rgba(23,23,23,.28)}
+.auth-status{min-height:20px;font-size:.9rem;margin-top:4px;transition:opacity 220ms ease}
+.auth-status:empty{opacity:0}
 .auth-status.error{color:#a4402c}
 .auth-status.ok{color:#3f5b45}
 .auth-links{display:flex;justify-content:space-between;margin-top:14px;font-size:.88rem}
-.auth-links a,.auth-links button{background:none;border:none;padding:0;font:inherit;color:#55705f;text-decoration:underline;cursor:pointer}
+.auth-links a,.auth-links button{background:none;border:none;padding:0;font:inherit;color:#55705f;text-decoration:underline;cursor:pointer;transition:color 180ms ease}
+.auth-links a:hover,.auth-links button:hover{color:#171717}
+.form input{transition:border-color 180ms ease,box-shadow 180ms ease}
+.form input:focus{border-color:#2f6b4f;box-shadow:0 0 0 3px rgba(47,107,79,.12);outline:none}
 [hidden]{display:none!important}
+@media (prefers-reduced-motion:no-preference){#setup-form:not([hidden]),#signin-form:not([hidden]),#reset-form:not([hidden]){animation:formIn 420ms cubic-bezier(.22,.61,.36,1) both}}
+@keyframes formIn{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:translateY(0)}}
 </style></head><body>
 <header class="site-header"><div class="wrap nav"><a class="brand" href="/">Ashok Kumar Bishnoi</a><nav class="navlinks"><a href="/services/">Services</a><a href="/about/">About</a><a href="/resources/">Resources</a><a href="/contact/">Contact</a><a href="/sign-in/" class="nav-signin">Sign In</a></nav></div></header>
 
@@ -67,6 +74,7 @@
 </section>
 
 <footer class="footer"><div class="wrap footergrid"><div>We help people run faster in Industry 4.0.</div><div><a href="/privacy/">Privacy</a> · <a href="/cookie-policy/">Cookies</a> · <a href="/terms/">Terms</a></div></div></footer>
+<script src="/assets/js/motion.js" defer=""></script>
 <script type="module" src="/dashboard/firebase-auth.js"></script>
 <script type="module" src="/sign-in/sign-in.js"></script>
 </body></html>

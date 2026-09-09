@@ -1,0 +1,273 @@
+/* Visual-polish layer: design tokens, scroll reveal, micro-interactions,
+   hero trajectory, frontiers progression, feedback-loop pulse.
+   Loaded after styles.css on every public page — adds motion, changes
+   nothing about layout, copy, or information architecture. */
+
+@import url("https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=Inter+Tight:wght@600;700;800&family=IBM+Plex+Mono:wght@400;500&display=swap");
+
+:root {
+  --paper: #f6f4ef;
+  --charcoal: #171717;
+  --graphite: #626262;
+  --border: #d9d6ce;
+  --green: #2f6b4f;
+  --amber: #c78b35;
+  --font-display: "Inter Tight", Inter, ui-sans-serif, system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --dur-fast: 180ms;
+  --dur-med: 460ms;
+  --dur-slow: 900ms;
+}
+
+h1, h2, h3, .brand { font-family: var(--font-display); }
+.eyebrow { font-family: var(--font-mono); }
+
+/* ---------- Micro-interactions ---------- */
+
+a, .btn, .card, .pill, .toc a {
+  transition: transform var(--dur-fast) var(--ease), background-color var(--dur-fast) var(--ease),
+    border-color var(--dur-fast) var(--ease), color var(--dur-fast) var(--ease), box-shadow var(--dur-fast) var(--ease);
+}
+
+.btn:hover { transform: translateY(-2px); }
+.btn:active { transform: translateY(0); transition-duration: 70ms; }
+.btn.primary:hover { box-shadow: 0 10px 26px -10px rgba(23, 23, 23, 0.4); }
+.btn:not(.primary):hover { border-color: var(--green); color: var(--green); }
+.btn:focus-visible, a:focus-visible, button:focus-visible, input:focus-visible, textarea:focus-visible {
+  outline: 2px solid var(--green);
+  outline-offset: 2px;
+}
+
+.navlinks a:not(.nav-signin) {
+  position: relative;
+  text-decoration: none;
+}
+.navlinks a:not(.nav-signin)::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 100%;
+  bottom: -3px;
+  height: 1px;
+  background: currentColor;
+  transition: right var(--dur-med) var(--ease);
+}
+.navlinks a:not(.nav-signin):hover::after,
+.navlinks a:not(.nav-signin):focus-visible::after {
+  right: 0;
+}
+
+.card:hover {
+  transform: translateY(-4px);
+  border-color: var(--green);
+  box-shadow: 0 24px 44px -28px rgba(23, 23, 23, 0.28);
+}
+
+.pill:hover, .toc a:hover { border-color: var(--green); transform: translateY(-1px); }
+
+/* ---------- Scroll reveal (section-level, not per-paragraph — some
+   things stay still on purpose) ---------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  .section[data-reveal] {
+    opacity: 0;
+    transform: translateY(26px);
+    transition: opacity var(--dur-slow) var(--ease), transform var(--dur-slow) var(--ease);
+    will-change: opacity, transform;
+  }
+  .section[data-reveal].is-visible {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  .section[data-reveal] h2 {
+    transition: transform 640ms var(--ease) 90ms;
+  }
+  .section[data-reveal]:not(.is-visible) h2 {
+    transform: translateY(12px);
+  }
+
+  /* Hero: a subtle load-time entrance, never scroll-gated — content is
+     never withheld waiting on scroll or JS. */
+  .hero .eyebrow { animation: heroRise 700ms var(--ease) both; }
+  .hero h1 { animation: heroRise 800ms var(--ease) 90ms both; }
+  .hero p.lead { animation: heroRise 800ms var(--ease) 180ms both; }
+  .hero .actions { animation: heroRise 800ms var(--ease) 260ms both; }
+}
+
+@keyframes heroRise {
+  from { opacity: 0; transform: translateY(16px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* ---------- Hero trajectory (homepage only) ---------- */
+
+.hero { position: relative; overflow: hidden; }
+.hero-trajectory {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.9;
+}
+.hero .wrap { position: relative; z-index: 1; }
+
+.hero-trajectory path.line {
+  fill: none;
+  stroke: var(--green);
+  stroke-width: 1.4;
+  stroke-linecap: round;
+  opacity: 0.55;
+}
+.hero-trajectory circle.node {
+  fill: var(--green);
+}
+.hero-trajectory circle.node.amber { fill: var(--amber); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .hero-trajectory path.line {
+    stroke-dasharray: 1400;
+    stroke-dashoffset: 1400;
+    animation: drawPath 2.2s var(--ease) 200ms forwards;
+  }
+  .hero-trajectory circle.node {
+    opacity: 0;
+    animation: nodeIn 600ms var(--ease) forwards, nodePulse 3.6s ease-in-out infinite;
+  }
+  .hero-trajectory circle.node:nth-of-type(1) { animation-delay: 0.5s, 2.6s; }
+  .hero-trajectory circle.node:nth-of-type(2) { animation-delay: 0.9s, 3.1s; }
+  .hero-trajectory circle.node:nth-of-type(3) { animation-delay: 1.3s, 3.6s; }
+  .hero-trajectory circle.node:nth-of-type(4) { animation-delay: 1.7s, 4.1s; }
+  .hero-trajectory { animation: driftSlow 18s ease-in-out infinite; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .hero-trajectory path.line { opacity: 0.35; }
+  .hero-trajectory circle.node { opacity: 1; }
+}
+
+@keyframes drawPath {
+  to { stroke-dashoffset: 0; }
+}
+@keyframes nodeIn {
+  to { opacity: 1; }
+}
+@keyframes nodePulse {
+  0%, 100% { opacity: 1; r: 3.4; }
+  50% { opacity: 0.55; r: 4.6; }
+}
+@keyframes driftSlow {
+  0%, 100% { transform: translate3d(0, 0, 0); }
+  50% { transform: translate3d(-6px, 4px, 0); }
+}
+
+/* ---------- Four Frontiers progression ---------- */
+
+.frontiers-track {
+  position: relative;
+  margin-top: 12px;
+}
+.frontiers-track::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: linear-gradient(to bottom, var(--border), var(--green));
+  opacity: 0.5;
+}
+.frontier {
+  position: relative;
+  padding-left: 28px;
+  margin-bottom: 8px;
+}
+.frontier::before {
+  content: "";
+  position: absolute;
+  left: -4px;
+  top: 8px;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--paper);
+  border: 2px solid var(--green);
+  transition: transform var(--dur-med) var(--ease), background-color var(--dur-med) var(--ease);
+}
+.frontier[data-stage="flying"]::before { border-color: var(--amber); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .frontier {
+    opacity: 0;
+    transform: translateX(-10px);
+    transition: opacity var(--dur-slow) var(--ease), transform var(--dur-slow) var(--ease);
+  }
+  .frontier.is-visible {
+    opacity: 1;
+    transform: translateX(0);
+  }
+  .frontier.is-visible::before {
+    background: var(--green);
+    transform: scale(1.15);
+  }
+  .frontier[data-stage="flying"].is-visible::before { background: var(--amber); }
+}
+
+/* ---------- Think / Build / Measure / Improve loop ---------- */
+
+.loop-step { position: relative; }
+.loop-step .eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+.loop-step .eyebrow::before {
+  content: "";
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--border);
+  transition: background-color var(--dur-med) var(--ease), box-shadow var(--dur-med) var(--ease);
+}
+.loop-step.is-visible .eyebrow::before {
+  background: var(--green);
+  box-shadow: 0 0 0 4px rgba(47, 107, 79, 0.14);
+}
+.loop-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 24px;
+  bottom: -18px;
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+}
+@media (prefers-reduced-motion: no-preference) {
+  .loop-step:not(:last-child)::after {
+    background: linear-gradient(to bottom, var(--green), var(--border));
+    background-size: 100% 200%;
+    background-position: 0 100%;
+    transition: background-position 900ms var(--ease);
+  }
+  .loop-step.is-visible:not(:last-child)::after {
+    background-position: 0 0%;
+  }
+}
+
+/* ---------- Cursor-proximity (desktop, fine pointer only) ---------- */
+
+@media (hover: hover) and (pointer: fine) and (prefers-reduced-motion: no-preference) {
+  .hero-trajectory circle.node { transition: transform 260ms var(--ease); }
+}
+
+/* ---------- Mobile: simplify, never remove information ---------- */
+
+@media (max-width: 760px) {
+  .hero-trajectory { opacity: 0.5; }
+  .hero-trajectory { animation: none; }
+  .frontiers-track::before { display: none; }
+  .frontier { padding-left: 0; }
+  .frontier::before { display: none; }
+}
+
+/* Never let decorative motion cause horizontal overflow. */
+.hero, .hero-trajectory { max-width: 100%; }
