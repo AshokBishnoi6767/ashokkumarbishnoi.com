@@ -10,14 +10,52 @@ const ToolStatus = Object.freeze({
 });
 
 const AuthState = Object.freeze({
+  DISCONNECTED: "DISCONNECTED",
   CONNECTED: "CONNECTED",
   AUTHENTICATED: "AUTHENTICATED",
   AUTHORIZED: "AUTHORIZED",
   PARTIALLY_AUTHORIZED: "PARTIALLY_AUTHORIZED",
   EXPIRED: "EXPIRED",
   REVOKED: "REVOKED",
-  DISCONNECTED: "DISCONNECTED",
   ERROR: "ERROR",
+  UNKNOWN: "UNKNOWN",
+});
+
+// Provider Registry status — distinct from AuthState/ToolStatus. A provider
+// can be SUPPORTED (a connector is feasible) long before it is IMPLEMENTED
+// (code exists), CONNECTED (a live session exists), or AUTHORIZED (that
+// session actually has the scopes a capability needs).
+const ProviderStatus = Object.freeze({
+  SUPPORTED: "SUPPORTED",
+  IMPLEMENTED: "IMPLEMENTED",
+  CONNECTED: "CONNECTED",
+  AUTHORIZED: "AUTHORIZED",
+  NOT_CONNECTED: "NOT_CONNECTED",
+  NOT_SUPPORTED: "NOT_SUPPORTED",
+  UNKNOWN: "UNKNOWN",
+  REQUIRES_SPECIAL_ACCESS: "REQUIRES_SPECIAL_ACCESS",
+  MANUAL: "MANUAL",
+});
+
+const CapabilityStatus = Object.freeze({
+  SUPPORTED: "SUPPORTED",
+  POSSIBLE: "POSSIBLE",
+  REQUIRES_SPECIAL_ACCESS: "REQUIRES_SPECIAL_ACCESS",
+  MANUAL: "MANUAL",
+  UNKNOWN: "UNKNOWN",
+  NOT_SUPPORTED: "NOT_SUPPORTED",
+  DISABLED: "DISABLED",
+});
+
+const HealthState = Object.freeze({
+  HEALTHY: "HEALTHY",
+  DEGRADED: "DEGRADED",
+  AUTH_EXPIRED: "AUTH_EXPIRED",
+  AUTH_REVOKED: "AUTH_REVOKED",
+  RATE_LIMITED: "RATE_LIMITED",
+  PROVIDER_ERROR: "PROVIDER_ERROR",
+  CONFIGURATION_ERROR: "CONFIGURATION_ERROR",
+  UNKNOWN: "UNKNOWN",
 });
 
 const AuthorityLevel = Object.freeze({
@@ -102,6 +140,9 @@ const MemoryClass = Object.freeze({
 module.exports = {
   ToolStatus,
   AuthState,
+  ProviderStatus,
+  CapabilityStatus,
+  HealthState,
   AuthorityLevel,
   RiskLevel,
   ActionStatus,

@@ -8,7 +8,28 @@ const { EventStatus } = require("../../shared/constants");
 const SEEN_EVENT_IDS = new Set();
 const PROCESSED = [];
 
+// Only internal, unsignable sources may omit signature_verified. Any other
+// provider MUST explicitly assert signature_verified === true — an event
+// that simply forgets to set the field must fail closed, not pass through
+// as if it had been verified.
+const UNSIGNED_TRUSTED_PROVIDERS = new Set(["mock", "internal", "self"]);
+
 function routeEvent(rawEvent) {
+  // Most specific first: an explicit failed check is always rejected.
+  if (rawEvent && rawEvent.signature_verified === false) {
+    const rejected = { ...rawEvent, processing_status: EventStatus.REJECTED, reason: "SIGNATURE_INVALID" };
+    PROCESSED.push(rejected);
+    return rejected;
+  }
+  // Fail closed on missing status: only internal, unsignable sources may
+  // omit signature_verified entirely. Any other provider must explicitly
+  // assert signature_verified === true — silence is not verification.
+  const isTrustedUnsigned = rawEvent && UNSIGNED_TRUSTED_PROVIDERS.has(rawEvent.provider);
+  if (!isTrustedUnsigned && (!rawEvent || rawEvent.signature_verified !== true)) {
+    const rejected = { ...rawEvent, processing_status: EventStatus.REJECTED, reason: "SIGNATURE_STATUS_REQUIRED" };
+    PROCESSED.push(rejected);
+    return rejected;
+  }
   const invalidReason = validateNormalizedEvent(rawEvent);
   if (invalidReason) {
     const rejected = { ...rawEvent, processing_status: EventStatus.REJECTED, reason: invalidReason };

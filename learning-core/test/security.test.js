@@ -3,18 +3,33 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { runAction } = require("../integration/actions/lifecycle");
+const credentials = require("../integration/credentials/reference");
 const logger = require("../shared/logger");
 
-test("security: an unauthorized (disconnected) tool's capability is rejected before execution", () => {
-  const result = runAction({ capabilityId: "calendly.get_availability", requestedBy: "attacker-or-user", why: "test" });
+test("security: an unauthorized (disconnected) tool's capability is rejected before execution", async () => {
+  const result = await runAction({ capabilityId: "github.get_repository", params: { owner: "octocat", repo: "hello-world" }, requestedBy: "attacker-or-user", why: "test" });
   assert.equal(result.action_status, "NOT_AUTHORIZED");
   assert.equal(result.action_ref, null);
   assert.equal(result.verified, false);
 });
 
-test("security: an arbitrary/invented capability is rejected, never treated as real", () => {
-  const result = runAction({ capabilityId: "hubspot.delete_all_contacts", requestedBy: "test", why: "test" });
+test("security: an arbitrary/invented capability is rejected, never treated as real", async () => {
+  const result = await runAction({ capabilityId: "hubspot.delete_all_contacts", requestedBy: "test", why: "test" });
   assert.equal(result.action_status, "CAPABILITY_NOT_AVAILABLE");
+});
+
+test("security: credential describe() never contains the raw secret value", () => {
+  const previous = process.env.GITHUB_TOKEN;
+  process.env.GITHUB_TOKEN = "ghp_supersecrettestvalue";
+  try {
+    const description = credentials.describe("github");
+    const serialized = JSON.stringify(description);
+    assert.ok(!serialized.includes("ghp_supersecrettestvalue"));
+    assert.equal(description.credential_available, true);
+  } finally {
+    if (previous === undefined) delete process.env.GITHUB_TOKEN;
+    else process.env.GITHUB_TOKEN = previous;
+  }
 });
 
 test("security: logger redacts fields that look like secrets", () => {
