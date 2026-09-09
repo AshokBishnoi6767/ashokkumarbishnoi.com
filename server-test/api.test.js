@@ -393,6 +393,89 @@ test("SEO: cornerstone pages never claim to be objectively No. 1 / best / leadin
   }
 });
 
+// --- 50-article Thought Leadership engine ---
+
+const SAMPLE_ARTICLE_SLUGS = [
+  "your-company-doesnt-need-more-technology",
+  "the-ai-adoption-gap",
+  "the-b2b-content-gap",
+  "the-data-to-decision-gap",
+  "think-build-measure-improve",
+];
+
+test("SEO: sample thought-leadership articles are indexable with unique canonical, Article + BreadcrumbList JSON-LD", async () => {
+  for (const slug of SAMPLE_ARTICLE_SLUGS) {
+    const res = await fetch(baseUrl + `/resources/${slug}/`);
+    assert.equal(res.status, 200, slug);
+    const text = await res.text();
+    assert.match(text, /rel="canonical"/, slug);
+    assert.match(text, /content="index,follow"/, slug);
+    const blocks = [...text.matchAll(/<script type="application\/ld\+json">([\s\S]*?)<\/script>/g)].map((m) => JSON.parse(m[1]));
+    assert.ok(blocks.some((b) => b["@type"] === "Article"), `${slug} missing Article schema`);
+    assert.ok(blocks.some((b) => b["@type"] === "BreadcrumbList"), `${slug} missing BreadcrumbList schema`);
+  }
+});
+
+test("SEO: every article has exactly one H1 and a working whitepaper CTA marked as not yet available (no fake download)", async () => {
+  for (const slug of SAMPLE_ARTICLE_SLUGS) {
+    const res = await fetch(baseUrl + `/resources/${slug}/`);
+    const text = await res.text();
+    const h1Count = (text.match(/<h1>/g) || []).length;
+    assert.equal(h1Count, 1, slug);
+    assert.match(text, /whitepaper-cta/, slug);
+    assert.match(text, /Whitepaper in production/, slug);
+    assert.equal(/href="[^"]*\.pdf"/i.test(text), false, `${slug} must not link a fake PDF download`);
+  }
+});
+
+test("SEO: articles link to real related articles that actually exist (no broken related-content links)", async () => {
+  for (const slug of SAMPLE_ARTICLE_SLUGS) {
+    const res = await fetch(baseUrl + `/resources/${slug}/`);
+    const text = await res.text();
+    const related = [...text.matchAll(/class="related-articles">[\s\S]*?<\/section>/g)][0];
+    assert.ok(related, slug);
+    const links = [...related[0].matchAll(/href="(\/resources\/[a-z0-9\-]+\/)"/g)].map((m) => m[1]);
+    assert.ok(links.length >= 3, `${slug} should have at least 3 related links`);
+    for (const link of links) {
+      const linkedRes = await fetch(baseUrl + link);
+      assert.equal(linkedRes.status, 200, `${slug} links to broken ${link}`);
+    }
+  }
+});
+
+test("SEO: the Thought Leadership hub lists all 50 articles and is indexable (no longer a thin noindex stub)", async () => {
+  const res = await fetch(baseUrl + "/resources/thought-leadership/");
+  assert.equal(res.status, 200);
+  const text = await res.text();
+  assert.match(text, /content="index,follow"/);
+  const links = new Set([...text.matchAll(/href="(\/resources\/[a-z0-9\-]+\/)"/g)].map((m) => m[1]));
+  assert.ok(links.size >= 50, `expected at least 50 article links on the hub, found ${links.size}`);
+});
+
+test("SEO: sitemap.xml includes the 50 articles and the thought-leadership hub", async () => {
+  const res = await fetch(baseUrl + "/sitemap.xml");
+  const text = await res.text();
+  for (const slug of SAMPLE_ARTICLE_SLUGS) {
+    assert.match(text, new RegExp(`<loc>https://ashokkumarbishnoi\\.com/resources/${slug}/</loc>`), slug);
+  }
+  assert.match(text, /<loc>https:\/\/ashokkumarbishnoi\.com\/resources\/thought-leadership\/<\/loc>/);
+});
+
+test("SEO: the 'Ask the Navigator' CTA on an article targets the existing public Navigator widget, not a dead link", async () => {
+  const res = await fetch(baseUrl + "/resources/the-feedback-loop/");
+  const text = await res.text();
+  assert.match(text, /data-open-navigator=""/);
+  assert.match(text, /article-visuals\.js/);
+});
+
+test("SEO: no article makes an unverifiable statistic claim — reserved words like 'studies show' or 'research shows' never appear unattributed", async () => {
+  for (const slug of SAMPLE_ARTICLE_SLUGS) {
+    const res = await fetch(baseUrl + `/resources/${slug}/`);
+    const text = await res.text();
+    assert.equal(/studies show|research shows|according to a study|statistics show/i.test(text), false, `${slug} should not contain unattributed research claims`);
+  }
+});
+
 // --- Activity/Audit surface ---
 
 test("GET /api/audit: no token is 401 UNAUTHORIZED", async () => {

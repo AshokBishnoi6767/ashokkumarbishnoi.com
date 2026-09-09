@@ -269,5 +269,35 @@ a, .btn, .card, .pill, .toc a {
   .frontier::before { display: none; }
 }
 
+/* ---------- Article visual concepts (article-visuals.js) ---------- */
+
+@media (prefers-reduced-motion: no-preference) {
+  .article-visual .av-node {
+    opacity: 0;
+    animation: nodeIn 500ms var(--ease) forwards, nodePulse 3.2s ease-in-out infinite;
+  }
+  .article-visual .av-flow {
+    animation: flowMove 2.4s ease-in-out infinite;
+  }
+  .article-visual .av-spin {
+    transform-origin: center;
+    animation: spinSlow 6s linear infinite;
+  }
+  .article-visual .av-pulse {
+    animation: nodePulse 2.4s ease-in-out infinite;
+  }
+}
+
+@keyframes flowMove {
+  0% { transform: translateX(0); opacity: 0.4; }
+  50% { opacity: 1; }
+  100% { transform: translateX(340px); opacity: 0.2; }
+}
+@keyframes spinSlow {
+  from { transform: rotate(0deg); }
+  to { transform: rotate(360deg); }
+}
+
 /* Never let decorative motion cause horizontal overflow. */
 .hero, .hero-trajectory { max-width: 100%; }
+.article-visual { max-width: 100%; overflow: hidden; }
