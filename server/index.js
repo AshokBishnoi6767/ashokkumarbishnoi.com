@@ -17,6 +17,11 @@ const publicAgent = require("../learning-core/core/publicAgent");
 const { integrationHealth } = require("../learning-core/integration/health");
 const { listProviders } = require("../learning-core/model/registry");
 const logger = require("../learning-core/shared/logger");
+const { listAudit } = require("../learning-core/integration/audit/log");
+const { listPendingApprovals, listAllApprovals } = require("../learning-core/integration/approvals/store");
+const { approveAction, rejectAction } = require("../learning-core/integration/actions/lifecycle");
+const memoryStore = require("../learning-core/memory/store");
+const { MemoryClass } = require("../learning-core/shared/constants");
 
 const REPO_ROOT = path.join(__dirname, "..");
 const PUBLIC_DIR = path.join(REPO_ROOT, "public");
@@ -117,7 +122,12 @@ function serveStatic(rootDir, urlPath, res) {
   });
 }
 
-const server = http.createServer(async (req, res) => {
+// The actual request-handling logic, kept independent of http.createServer
+// so it can be reused verbatim by a Cloud Functions gen2 HTTPS trigger
+// (see functions-entry.js) — same handler, same behavior, whichever
+// runtime is fronting it. Nothing about the Control Layer / auth / audit
+// path changes between local dev and that production runtime.
+async function requestHandler(req, res) {
   const correlationId = randomUUID();
   const url = req.url || "/";
 
@@ -158,6 +168,53 @@ const server = http.createServer(async (req, res) => {
       return sendJson(res, 200, { models: listProviders(), integrations: integrationHealth() });
     }
 
+    // Everything below is private dashboard data (activity, approvals,
+    // memory) — same bearer-token boundary as /api/ai, never reachable
+    // anonymously.
+    if (req.method === "GET" && url === "/api/audit") {
+      if (!isAuthorizedPrivateRequest(req)) {
+        return sendJson(res, 401, { status: "UNAUTHORIZED", reason: "Missing or invalid bearer token." });
+      }
+      const entries = listAudit().slice(-200).reverse();
+      return sendJson(res, 200, { audit: entries });
+    }
+
+    if (req.method === "GET" && url === "/api/approvals") {
+      if (!isAuthorizedPrivateRequest(req)) {
+        return sendJson(res, 401, { status: "UNAUTHORIZED", reason: "Missing or invalid bearer token." });
+      }
+      const pending = listPendingApprovals();
+      const history = listAllApprovals()
+        .filter((a) => a.status !== "PENDING")
+        .slice(0, 50);
+      return sendJson(res, 200, { pending, history });
+    }
+
+    const approvalDecisionMatch = req.method === "POST" && url.match(/^\/api\/approvals\/([^/?]+)\/decision$/);
+    if (approvalDecisionMatch) {
+      if (!isAuthorizedPrivateRequest(req)) {
+        return sendJson(res, 401, { status: "UNAUTHORIZED", reason: "Missing or invalid bearer token." });
+      }
+      const approvalId = decodeURIComponent(approvalDecisionMatch[1]);
+      const body = await readJsonBody(req).catch((err) => ({ __error: err.message }));
+      if (body.__error || (body.decision !== "approve" && body.decision !== "reject")) {
+        return sendJson(res, 400, { status: "INVALID_REQUEST", reason: body.__error || "decision must be 'approve' or 'reject'." });
+      }
+      const outcome =
+        body.decision === "approve" ? await approveAction(approvalId) : rejectAction(approvalId, { rejectedBy: "ashok" });
+      logger.info("approval_decision", { correlationId, approvalId, decision: body.decision, status: outcome.status });
+      if (outcome.status === "NOT_FOUND") return sendJson(res, 404, outcome);
+      return sendJson(res, 200, outcome);
+    }
+
+    if (req.method === "GET" && url === "/api/memory") {
+      if (!isAuthorizedPrivateRequest(req)) {
+        return sendJson(res, 401, { status: "UNAUTHORIZED", reason: "Missing or invalid bearer token." });
+      }
+      const records = Object.values(MemoryClass).flatMap((memoryClass) => memoryStore.query(memoryClass, () => true));
+      return sendJson(res, 200, { memory: records });
+    }
+
     if (url === "/dashboard" || url.startsWith("/dashboard/") || url.startsWith("/dashboard?")) {
       const sub = url.replace(/^\/dashboard/, "") || "/";
       return serveStatic(DASHBOARD_DIR, sub === "/" ? "/index.html" : sub, res);
@@ -168,7 +225,9 @@ const server = http.createServer(async (req, res) => {
     logger.error("server_error", { correlationId, message: err.message });
     sendJson(res, 500, { status: "SERVER_ERROR" });
   }
-});
+}
+
+const server = http.createServer(requestHandler);
 
 if (require.main === module) {
   server.listen(PORT, () => {
@@ -178,4 +237,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { server, ADMIN_API_TOKEN };
+module.exports = { server, requestHandler, ADMIN_API_TOKEN };

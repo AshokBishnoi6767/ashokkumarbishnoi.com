@@ -1,9 +1,16 @@
 {
   "name": "ashok-personal-ai",
   "private": true,
-  "description": "Local application runtime: server, private dashboard, and public site AI agent. Zero external dependencies.",
+  "description": "Local application runtime: server, private dashboard, and public site AI agent. The learning-core Control Layer itself remains zero-dependency; firebase-functions below exists only to front the same request handler as a Cloud Functions gen2 HTTPS trigger for production — see functions-entry.js.",
+  "main": "functions-entry.js",
+  "engines": {
+    "node": "20"
+  },
   "scripts": {
     "start": "node server/index.js",
     "test": "NODE_ENV=test node --test"
+  },
+  "dependencies": {
+    "firebase-functions": "^7.3.2"
   }
 }

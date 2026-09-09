@@ -14,4 +14,5 @@ module.exports = {
   newWorkflowId: () => makeId("workflow"),
   newMemoryId: () => makeId("mem"),
   newInputId: () => makeId("input"),
+  newApprovalId: () => makeId("approval"),
 };

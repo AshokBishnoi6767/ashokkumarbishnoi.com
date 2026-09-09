@@ -51,14 +51,54 @@
     if (e.key === "Enter") gateSubmit.click();
   });
 
+  // Section-scoped refresh callbacks, keyed by nav data-section value.
+  // Registered by each section's setup function; invoked every time that
+  // nav item is opened so data reflects whatever changed since the app
+  // loaded (a new approval, a new audit entry, etc.) — not just a
+  // load-once snapshot.
+  var sectionRefreshers = {};
+
+  function goToSection(id) {
+    var btn = document.querySelector('#nav button[data-section="' + id + '"]');
+    if (btn) btn.click();
+  }
+
+  function escapeHtml(text) {
+    var div = document.createElement("div");
+    div.textContent = text == null ? "" : String(text);
+    return div.innerHTML;
+  }
+
+  function apiFetch(path, options) {
+    options = options || {};
+    options.headers = Object.assign({ "Content-Type": "application/json", Authorization: "Bearer " + getToken() }, options.headers || {});
+    return fetch(path, options).then(function (res) {
+      if (res.status === 401) {
+        localStorage.removeItem(TOKEN_KEY);
+        showGate("That token was rejected.");
+        throw new Error("unauthorized");
+      }
+      return res.json().then(function (data) {
+        return { ok: res.ok, status: res.status, data: data };
+      });
+    });
+  }
+
   var appInitialized = false;
   function initApp() {
     if (appInitialized) return;
     appInitialized = true;
-    setupNav();
+    // Register every section's refresh callback BEFORE setupNav() fires its
+    // initial click on Home — otherwise the first paint has nothing to call.
     setupAgent();
     setupIntegrations();
     setupSettings();
+    setupHome();
+    setupApprovals();
+    setupActivity();
+    setupMemory();
+    setupNav();
+    refreshApprovalsBadge();
   }
 
   function setupNav() {
@@ -74,9 +114,58 @@
         });
         btn.classList.add("active");
         document.getElementById("section-" + btn.dataset.section).classList.add("active");
+        if (sectionRefreshers[btn.dataset.section]) sectionRefreshers[btn.dataset.section]();
       });
     });
     buttons[0].click();
+  }
+
+  function refreshApprovalsBadge() {
+    apiFetch("/api/approvals")
+      .then(function (res) {
+        var badge = document.getElementById("approvals-badge");
+        var n = res.ok ? res.data.pending.length : 0;
+        if (n > 0) {
+          badge.textContent = String(n);
+          badge.hidden = false;
+        } else {
+          badge.hidden = true;
+        }
+      })
+      .catch(function () {});
+  }
+
+  function setupHome() {
+    function render() {
+      var el = document.getElementById("home-status");
+      el.innerHTML = "<div class=\"empty-state\">Loading…</div>";
+      apiFetch("/api/approvals").then(function (res) {
+        if (!res.ok) return;
+        var n = res.data.pending.length;
+        var html = "";
+        if (n > 0) {
+          html +=
+            '<div class="home-status"><div class="section-eyebrow">Waiting on you</div><div class="count">' +
+            n +
+            " action" +
+            (n === 1 ? "" : "s") +
+            ' pending approval</div><a href="#" id="home-goto-approvals">Review approvals →</a></div>';
+        }
+        html +=
+          '<div class="empty-state"><strong>' +
+          (n > 0 ? "Nothing else to report." : "Nothing to report yet.") +
+          "</strong>Home will summarize what needs your attention as more tools are connected. For now, start with AI Agent." +
+          '<div class="note">See Integrations for what is actually connected right now.</div></div>';
+        el.innerHTML = html;
+        var link = document.getElementById("home-goto-approvals");
+        if (link)
+          link.addEventListener("click", function (e) {
+            e.preventDefault();
+            goToSection("approvals");
+          });
+      });
+    }
+    sectionRefreshers.home = render;
   }
 
   function setupSettings() {
@@ -239,6 +328,186 @@
       input.style.height = "auto";
       send(message, false);
     });
+  }
+
+  function resultTag(result) {
+    var cls = result === "SUCCESS" ? "ok" : result === "UNKNOWN" || result === "RECOVERING" ? "pending" : result === "BLOCKED" || result === "FAILED" ? "bad" : "";
+    return '<span class="tag ' + cls + '">' + escapeHtml(result) + "</span>";
+  }
+
+  function setupApprovals() {
+    var pendingEl = document.getElementById("approvals-pending");
+    var historyEl = document.getElementById("approvals-history");
+
+    function decide(approvalId, decision, btn) {
+      var card = btn.closest(".approval-card");
+      card.querySelectorAll("button").forEach(function (b) {
+        b.disabled = true;
+      });
+      apiFetch("/api/approvals/" + encodeURIComponent(approvalId) + "/decision", {
+        method: "POST",
+        body: JSON.stringify({ decision: decision }),
+      })
+        .then(function () {
+          render();
+          refreshApprovalsBadge();
+        })
+        .catch(function () {
+          card.querySelectorAll("button").forEach(function (b) {
+            b.disabled = false;
+          });
+        });
+    }
+
+    function render() {
+      pendingEl.innerHTML = "<div class=\"empty-state\">Loading…</div>";
+      historyEl.innerHTML = "<div class=\"empty-state\">Loading…</div>";
+      apiFetch("/api/approvals").then(function (res) {
+        if (!res.ok) {
+          pendingEl.innerHTML = '<div class="empty-state">Could not load approvals.</div>';
+          historyEl.innerHTML = "";
+          return;
+        }
+        var pending = res.data.pending;
+        var history = res.data.history;
+
+        if (pending.length === 0) {
+          pendingEl.innerHTML = '<div class="empty-state"><strong>Nothing waiting on you.</strong>Actions that need your explicit approval before they execute will appear here — propose one by asking the Agent to do something with MEDIUM risk or higher.</div>';
+        } else {
+          pendingEl.innerHTML = pending
+            .map(function (a) {
+              return (
+                '<div class="approval-card" data-approval-id="' +
+                escapeHtml(a.approval_id) +
+                '"><div class="capability">' +
+                escapeHtml(a.capability_id) +
+                "</div>" +
+                (a.why ? '<div class="why">' + escapeHtml(a.why) + "</div>" : "") +
+                '<div class="params">' +
+                escapeHtml(JSON.stringify(a.params, null, 2)) +
+                "</div>" +
+                '<div class="approval-actions"><button class="approve" type="button">Approve &amp; run</button><button class="reject" type="button">Reject</button></div></div>'
+              );
+            })
+            .join("");
+          pendingEl.querySelectorAll(".approval-card").forEach(function (card) {
+            var id = card.dataset.approvalId;
+            card.querySelector(".approve").addEventListener("click", function (e) {
+              decide(id, "approve", e.target);
+            });
+            card.querySelector(".reject").addEventListener("click", function (e) {
+              decide(id, "reject", e.target);
+            });
+          });
+        }
+
+        if (history.length === 0) {
+          historyEl.innerHTML = '<div class="empty-state">No decisions recorded yet.</div>';
+        } else {
+          historyEl.innerHTML = history
+            .map(function (a) {
+              var tagClass = a.status === "APPROVED" ? "ok" : "bad";
+              return (
+                '<div class="approval-history-row"><span>' +
+                escapeHtml(a.capability_id) +
+                '</span><span class="tag ' +
+                tagClass +
+                '">' +
+                escapeHtml(a.status) +
+                '</span><span class="activity-when">' +
+                escapeHtml(a.resolved_at) +
+                "</span></div>"
+              );
+            })
+            .join("");
+        }
+      });
+    }
+
+    sectionRefreshers.approvals = render;
+  }
+
+  function setupActivity() {
+    var el = document.getElementById("activity-list");
+
+    function render() {
+      el.innerHTML = "<div class=\"empty-state\">Loading…</div>";
+      apiFetch("/api/audit").then(function (res) {
+        if (!res.ok) {
+          el.innerHTML = '<div class="empty-state">Could not load activity.</div>';
+          return;
+        }
+        var entries = res.data.audit;
+        if (entries.length === 0) {
+          el.innerHTML = '<div class="empty-state"><strong>Nothing has happened yet.</strong>Every action the Agent attempts — proposed, blocked, executed, verified — will show up here with who requested it, what it used, and the outcome.</div>';
+          return;
+        }
+        el.innerHTML =
+          '<div class="activity-list">' +
+          entries
+            .map(function (e) {
+              return (
+                '<div class="activity-row"><div class="activity-when">' +
+                escapeHtml(e.when) +
+                '</div><div class="activity-what">' +
+                escapeHtml(e.why || e.capability) +
+                '<span class="capability">' +
+                escapeHtml(e.capability) +
+                (e.tool ? " · " + escapeHtml(e.tool) : "") +
+                "</span>" +
+                (e.note ? '<div class="activity-note">' + escapeHtml(e.note) + "</div>" : "") +
+                '</div><div>' +
+                resultTag(e.action_status) +
+                '</div><div>' +
+                resultTag(e.result) +
+                (e.verified ? ' <span class="tag ok">VERIFIED</span>' : "") +
+                "</div></div>"
+              );
+            })
+            .join("") +
+          "</div>";
+      });
+    }
+
+    sectionRefreshers.activity = render;
+  }
+
+  function setupMemory() {
+    var el = document.getElementById("memory-list");
+
+    function render() {
+      el.innerHTML = "<div class=\"empty-state\">Loading…</div>";
+      apiFetch("/api/memory").then(function (res) {
+        if (!res.ok) {
+          el.innerHTML = '<div class="empty-state">Could not load memory.</div>';
+          return;
+        }
+        var records = res.data.memory;
+        if (records.length === 0) {
+          el.innerHTML =
+            '<div class="empty-state"><strong>No memory records yet.</strong>Conversations and the audit trail persist to disk and survive a restart. Structured long-term memory (facts, preferences, learned patterns) is a real storage layer with nothing written to it yet — nothing here is fabricated.</div>';
+          return;
+        }
+        el.innerHTML = records
+          .map(function (r) {
+            return (
+              '<div class="memory-row"><div class="content">' +
+              escapeHtml(r.content) +
+              '</div><div class="meta">' +
+              escapeHtml(r.type) +
+              " · " +
+              escapeHtml(r.truth_state) +
+              (r.confidence != null ? " · confidence " + escapeHtml(r.confidence) : "") +
+              " · source: " +
+              escapeHtml(r.source) +
+              "</div></div>"
+            );
+          })
+          .join("");
+      });
+    }
+
+    sectionRefreshers.knowledge = render;
   }
 
   if (getToken()) {

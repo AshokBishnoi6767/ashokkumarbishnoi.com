@@ -10,6 +10,7 @@ const githubConnector = require("../connectors/githubConnector");
 const googleCalendarConnector = require("../connectors/googleCalendarConnector");
 const testCalendarConnector = require("../connectors/testCalendarConnector");
 const { recordAudit } = require("../audit/log");
+const approvalsStore = require("../approvals/store");
 
 const CONNECTORS = {
   mock: mockConnector,
@@ -47,6 +48,7 @@ function finish(fields) {
     verified: !!fields.verified,
     action_ref: fields.actionRef || null,
     note: fields.note || null,
+    approval_id: fields.approvalId || null,
   };
   recordAudit(record);
   // LEARN: in the full Learning Core this writes a learning event into
@@ -105,6 +107,11 @@ async function runAction({ capabilityId, params = {}, requestedBy, why, confirme
   // because without a confirmed:true on THIS call nothing will execute.
   const confirmationRequired = capability.requires_confirmation || ALWAYS_CONFIRM_RISK_LEVELS.has(capability.risk_level);
   if (confirmationRequired && !confirmed) {
+    // Persist the proposal as a pending approval so it's reviewable from
+    // the dashboard's Approvals surface, not just recoverable by resending
+    // the exact same chat message. Approving it later re-enters this same
+    // function with confirmed:true — no separate execution path.
+    const pendingApproval = approvalsStore.createPendingApproval({ capabilityId, params, requestedBy, why });
     return finish({
       ...common,
       tool: resolvedToolId,
@@ -112,6 +119,7 @@ async function runAction({ capabilityId, params = {}, requestedBy, why, confirme
       actionStatus: ActionStatus.PENDING_CONFIRMATION,
       resultStatus: ResultStatus.BLOCKED,
       note: "Requires explicit approval before execution; none was given on this call.",
+      approvalId: pendingApproval.approval_id,
     });
   }
 
@@ -175,4 +183,58 @@ async function runAction({ capabilityId, params = {}, requestedBy, why, confirme
   });
 }
 
-module.exports = { runAction };
+// Human decision on a pending approval, driven from the dashboard rather
+// than the original chat thread. Approving does NOT execute directly —
+// it re-enters runAction() with confirmed:true, so the approved action
+// still passes through capability/authorization/risk checks exactly as a
+// freshly-confirmed chat message would (no separate, weaker execution path).
+async function approveAction(approvalId) {
+  const pending = approvalsStore.getApproval(approvalId);
+  if (!pending) {
+    return { status: "NOT_FOUND", reason: "No pending approval with that id." };
+  }
+  if (pending.status !== "PENDING") {
+    return { status: "ALREADY_RESOLVED", reason: `Already ${pending.status}.`, approval: pending };
+  }
+  const actionRecord = await runAction({
+    capabilityId: pending.capability_id,
+    params: pending.params,
+    requestedBy: pending.requested_by,
+    why: pending.why,
+    confirmed: true,
+  });
+  const resolved = approvalsStore.resolveApproval(approvalId, "APPROVED", actionRecord.action_id);
+  return { status: "APPROVED", approval: resolved, action: actionRecord };
+}
+
+// Rejecting never touches the connector — nothing was executed, so there is
+// nothing for the Action Lifecycle to run. The decision itself is still
+// recorded to the audit trail: a rejection is an outcome worth remembering.
+function rejectAction(approvalId, { rejectedBy = null } = {}) {
+  const pending = approvalsStore.getApproval(approvalId);
+  if (!pending) {
+    return { status: "NOT_FOUND", reason: "No pending approval with that id." };
+  }
+  if (pending.status !== "PENDING") {
+    return { status: "ALREADY_RESOLVED", reason: `Already ${pending.status}.`, approval: pending };
+  }
+  const resolved = approvalsStore.resolveApproval(approvalId, "REJECTED", null);
+  recordAudit({
+    action_id: "rejection-" + approvalId,
+    who: rejectedBy || pending.requested_by,
+    why: `Human rejected proposed action: ${pending.why || pending.capability_id}`,
+    when: new Date().toISOString(),
+    tool: null,
+    capability: pending.capability_id,
+    authorization_state_at_time: "N/A",
+    action_status: ActionStatus.PENDING_CONFIRMATION,
+    result: ResultStatus.BLOCKED,
+    verified: false,
+    action_ref: null,
+    note: "Rejected by human reviewer; never executed.",
+    approval_id: approvalId,
+  });
+  return { status: "REJECTED", approval: resolved };
+}
+
+module.exports = { runAction, approveAction, rejectAction };

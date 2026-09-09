@@ -26,16 +26,18 @@
     <ul class="nav" id="nav">
       <li><button data-section="home"><span class="num">01</span><span>Home</span></button></li>
       <li><button data-section="agent"><span class="num">02</span><span>AI Agent</span></button></li>
-      <li><button data-section="projects"><span class="num">03</span><span>Projects</span></button></li>
-      <li><button data-section="tasks"><span class="num">04</span><span>Tasks</span></button></li>
-      <li><button data-section="calendar"><span class="num">05</span><span>Calendar</span></button></li>
-      <li><button data-section="contacts"><span class="num">06</span><span>Contacts</span></button></li>
-      <li><button data-section="content"><span class="num">07</span><span>Content</span></button></li>
-      <li><button data-section="knowledge"><span class="num">08</span><span>Knowledge</span></button></li>
-      <li><button data-section="automations"><span class="num">09</span><span>Automations</span></button></li>
-      <li><button data-section="analytics"><span class="num">10</span><span>Analytics</span></button></li>
-      <li><button data-section="integrations"><span class="num">11</span><span>Integrations</span></button></li>
-      <li><button data-section="settings"><span class="num">12</span><span>Settings</span></button></li>
+      <li><button data-section="approvals"><span class="num">03</span><span>Approvals</span><span id="approvals-badge" class="nav-badge" hidden></span></button></li>
+      <li><button data-section="activity"><span class="num">04</span><span>Activity</span></button></li>
+      <li><button data-section="projects"><span class="num">05</span><span>Projects</span></button></li>
+      <li><button data-section="tasks"><span class="num">06</span><span>Tasks</span></button></li>
+      <li><button data-section="calendar"><span class="num">07</span><span>Calendar</span></button></li>
+      <li><button data-section="contacts"><span class="num">08</span><span>Contacts</span></button></li>
+      <li><button data-section="content"><span class="num">09</span><span>Content</span></button></li>
+      <li><button data-section="knowledge"><span class="num">10</span><span>Knowledge</span></button></li>
+      <li><button data-section="automations"><span class="num">11</span><span>Automations</span></button></li>
+      <li><button data-section="analytics"><span class="num">12</span><span>Analytics</span></button></li>
+      <li><button data-section="integrations"><span class="num">13</span><span>Integrations</span></button></li>
+      <li><button data-section="settings"><span class="num">14</span><span>Settings</span></button></li>
     </ul>
     <div class="sidebar-foot">v0.1 · local runtime</div>
   </aside>
@@ -45,11 +47,7 @@
     <section class="section" id="section-home">
       <div class="section-eyebrow">Overview</div>
       <h1 class="section-title">Your command center.</h1>
-      <div class="empty-state">
-        <strong>Nothing to report yet.</strong>
-        Home will summarize what needs your attention once real tools are connected. For now, start with AI Agent.
-        <div class="note">No integrations connected — see Integrations.</div>
-      </div>
+      <div id="home-status"><div class="empty-state">Loading…</div></div>
     </section>
 
     <section class="section" id="section-agent">
@@ -65,6 +63,20 @@
           <button type="submit" id="agent-send">Send</button>
         </form>
       </div>
+    </section>
+
+    <section class="section" id="section-approvals">
+      <div class="section-eyebrow">Human authority</div>
+      <h1 class="section-title">Approvals</h1>
+      <div id="approvals-pending"><div class="empty-state">Loading…</div></div>
+      <div class="subsection-title">History</div>
+      <div id="approvals-history"><div class="empty-state">Loading…</div></div>
+    </section>
+
+    <section class="section" id="section-activity">
+      <div class="section-eyebrow">Audit trail</div>
+      <h1 class="section-title">Activity</h1>
+      <div id="activity-list"><div class="empty-state">Loading…</div></div>
     </section>
 
     <section class="section" id="section-projects">
@@ -88,19 +100,19 @@
     <section class="section" id="section-contacts">
       <div class="section-eyebrow">Relationships</div>
       <h1 class="section-title">Contacts</h1>
-      <div class="empty-state"><strong>No CRM connected.</strong>Not built in this milestone.</div>
+      <div class="empty-state"><strong>No contacts yet.</strong>Not built in this milestone — ask the Agent about a person and it will say plainly that it has no CRM connected, rather than guessing.</div>
     </section>
 
     <section class="section" id="section-content">
       <div class="section-eyebrow">Output</div>
       <h1 class="section-title">Content</h1>
-      <div class="empty-state"><strong>Nothing drafted yet.</strong>Not built in this milestone.</div>
+      <div class="empty-state"><strong>No content drafted yet.</strong>Not built in this milestone.</div>
     </section>
 
     <section class="section" id="section-knowledge">
       <div class="section-eyebrow">Memory</div>
       <h1 class="section-title">Knowledge</h1>
-      <div class="empty-state"><strong>Conversations and audit history persist to disk and survive a server restart.</strong>Structured long-term memory (facts, preferences, learned patterns) is not populated automatically yet — the storage layer exists (see learning-core/memory) but nothing writes to it from a real conversation in this milestone.</div>
+      <div id="memory-list"><div class="empty-state">Loading…</div></div>
     </section>
 
     <section class="section" id="section-automations">

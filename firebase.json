@@ -5,6 +5,27 @@
       "firebase.json",
       "**/.*",
       "**/node_modules/**"
+    ],
+    "rewrites": [
+      { "source": "/api/**", "function": "api" },
+      { "source": "/dashboard", "function": "api" },
+      { "source": "/dashboard/**", "function": "api" }
     ]
-  }
+  },
+  "functions": [
+    {
+      "source": ".",
+      "codebase": "default",
+      "ignore": [
+        "firebase.json",
+        "**/.*",
+        "public/**",
+        "public-backupls/**",
+        "learning-core/.data/**",
+        "**/node_modules/**",
+        "server-test/**",
+        "learning-core/test/**"
+      ]
+    }
+  ]
 }
