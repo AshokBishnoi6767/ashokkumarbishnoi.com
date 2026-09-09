@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+
+<html lang="en"><head><meta charset="utf-8"/><meta content="width=device-width,initial-scale=1" name="viewport"/><title>Sign in | Ashok Kumar Bishnoi</title><meta content="noindex,nofollow" name="robots"/><link href="/styles.css" rel="stylesheet"/><style>
+.auth-card{max-width:420px;margin:0 auto;padding:36px;border:1px solid #d8e0d8;border-radius:20px;background:#fff}
+.auth-status{min-height:20px;font-size:.9rem;margin-top:4px}
+.auth-status.error{color:#a4402c}
+.auth-status.ok{color:#3f5b45}
+.auth-links{display:flex;justify-content:space-between;margin-top:14px;font-size:.88rem}
+.auth-links a,.auth-links button{background:none;border:none;padding:0;font:inherit;color:#55705f;text-decoration:underline;cursor:pointer}
+[hidden]{display:none!important}
+</style></head><body>
+<header class="site-header"><div class="wrap nav"><a class="brand" href="/">Ashok Kumar Bishnoi</a><nav class="navlinks"><a href="/services/">Services</a><a href="/about/">About</a><a href="/resources/">Resources</a><a href="/contact/">Contact</a><a href="/sign-in/" class="nav-signin">Sign In</a></nav></div></header>
+
+<section class="hero" style="padding:70px 0 50px">
+  <div class="wrap">
+    <div class="eyebrow">Private</div>
+    <h1 style="font-size:clamp(2.2rem,5vw,3.4rem)">Owner sign-in</h1>
+    <p class="lead">This is the entry point to the private command center — not a public account system.</p>
+  </div>
+</section>
+
+<section class="section" style="padding-top:0">
+  <div class="wrap">
+    <div class="auth-card">
+
+      <div id="auth-loading">Checking sign-in status…</div>
+
+      <form id="setup-form" hidden>
+        <div class="eyebrow" style="margin-bottom:14px">First-time owner setup</div>
+        <div class="form">
+          <input type="email" id="setup-email" placeholder="Your email" autocomplete="email" required/>
+          <input type="password" id="setup-password" placeholder="Choose a password (min. 6 characters)" autocomplete="new-password" minlength="6" required/>
+          <input type="password" id="setup-password-confirm" placeholder="Confirm password" autocomplete="new-password" minlength="6" required/>
+          <button class="btn primary" type="submit">Create owner account</button>
+        </div>
+        <div class="auth-status" id="setup-status"></div>
+        <p class="small" style="margin-top:16px">This creates the ONE owner account for this system. There is no public registration — after this, only sign-in is available.</p>
+      </form>
+
+      <form id="signin-form" hidden>
+        <div class="eyebrow" style="margin-bottom:14px">Sign in</div>
+        <div class="form">
+          <input type="email" id="signin-email" placeholder="Email" autocomplete="email" required/>
+          <input type="password" id="signin-password" placeholder="Password" autocomplete="current-password" required/>
+          <button class="btn primary" type="submit">Sign in</button>
+        </div>
+        <div class="auth-status" id="signin-status"></div>
+        <div class="auth-links">
+          <button type="button" id="forgot-password-btn">Forgot password?</button>
+        </div>
+      </form>
+
+      <form id="reset-form" hidden>
+        <div class="eyebrow" style="margin-bottom:14px">Reset password</div>
+        <div class="form">
+          <input type="email" id="reset-email" placeholder="Your email" autocomplete="email" required/>
+          <button class="btn primary" type="submit">Send reset email</button>
+        </div>
+        <div class="auth-status" id="reset-status"></div>
+        <div class="auth-links">
+          <button type="button" id="back-to-signin-btn">Back to sign in</button>
+        </div>
+      </form>
+
+    </div>
+  </div>
+</section>
+
+<footer class="footer"><div class="wrap footergrid"><div>We help people run faster in Industry 4.0.</div><div><a href="/privacy/">Privacy</a> · <a href="/cookie-policy/">Cookies</a> · <a href="/terms/">Terms</a></div></div></footer>
+<script type="module" src="/dashboard/firebase-auth.js"></script>
+<script type="module" src="/sign-in/sign-in.js"></script>
+</body></html>

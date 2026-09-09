@@ -12,10 +12,7 @@
 <div class="gate" id="gate">
   <div class="gate-card">
     <div class="gate-eyebrow">Private</div>
-    <h1 class="gate-title">Enter access token</h1>
-    <input type="password" id="gate-token" placeholder="Access token" autocomplete="off" />
-    <button id="gate-submit">Enter</button>
-    <div class="gate-error" id="gate-error">That token was rejected.</div>
+    <h1 class="gate-title">Checking sign-in status…</h1>
   </div>
 </div>
 
@@ -137,15 +134,16 @@
       <div class="section-eyebrow">Configuration</div>
       <h1 class="section-title">Settings</h1>
       <div class="empty-state">
-        <strong>Access token</strong>
-        Stored only in this browser's local storage.
-        <div class="note"><button id="forget-token" style="font-family:inherit;background:none;border:1px solid var(--border-strong);border-radius:3px;padding:6px 10px;cursor:pointer;">Forget token</button></div>
+        <strong>Signed in as</strong>
+        <span id="settings-owner-email">…</span>
+        <div class="note"><button id="sign-out-btn" style="font-family:inherit;background:none;border:1px solid var(--border-strong);border-radius:3px;padding:6px 10px;cursor:pointer;">Sign out</button></div>
       </div>
     </section>
 
   </main>
 </div>
 
+<script type="module" src="/dashboard/firebase-auth.js"></script>
 <script src="/dashboard/app.js"></script>
 </body>
 </html>

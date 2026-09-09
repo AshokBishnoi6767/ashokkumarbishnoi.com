@@ -1,19 +1,16 @@
 (function () {
   "use strict";
 
-  var TOKEN_KEY = "ashok_admin_token";
   var SESSION_KEY = "ashok_agent_session_id";
-  var LAST_MESSAGE_KEY = "ashok_agent_last_message";
 
   var gate = document.getElementById("gate");
   var app = document.getElementById("app");
-  var gateToken = document.getElementById("gate-token");
-  var gateSubmit = document.getElementById("gate-submit");
-  var gateError = document.getElementById("gate-error");
 
-  function getToken() {
-    return localStorage.getItem(TOKEN_KEY) || "";
-  }
+  // Set once window.__ashokAuthReady resolves, at the bottom of this file.
+  // Everything below that needs the current Firebase user/ID token goes
+  // through this — never through localStorage, which never holds identity
+  // or a password in this app.
+  var authApi = null;
 
   function getSessionId() {
     var id = localStorage.getItem(SESSION_KEY);
@@ -24,13 +21,8 @@
     return id;
   }
 
-  function showGate(errorMessage) {
-    app.classList.remove("active");
-    gate.style.display = "flex";
-    if (errorMessage) {
-      gateError.textContent = errorMessage;
-      gateError.style.display = "block";
-    }
+  function redirectToSignIn() {
+    location.href = "/sign-in";
   }
 
   function showApp() {
@@ -38,18 +30,6 @@
     app.classList.add("active");
     initApp();
   }
-
-  gateSubmit.addEventListener("click", function () {
-    var value = gateToken.value.trim();
-    if (!value) return;
-    localStorage.setItem(TOKEN_KEY, value);
-    gateError.style.display = "none";
-    showApp();
-  });
-
-  gateToken.addEventListener("keydown", function (e) {
-    if (e.key === "Enter") gateSubmit.click();
-  });
 
   // Section-scoped refresh callbacks, keyed by nav data-section value.
   // Registered by each section's setup function; invoked every time that
@@ -71,17 +51,21 @@
 
   function apiFetch(path, options) {
     options = options || {};
-    options.headers = Object.assign({ "Content-Type": "application/json", Authorization: "Bearer " + getToken() }, options.headers || {});
-    return fetch(path, options).then(function (res) {
-      if (res.status === 401) {
-        localStorage.removeItem(TOKEN_KEY);
-        showGate("That token was rejected.");
-        throw new Error("unauthorized");
-      }
-      return res.json().then(function (data) {
-        return { ok: res.ok, status: res.status, data: data };
+    return authApi
+      .getIdToken()
+      .then(function (token) {
+        options.headers = Object.assign({ "Content-Type": "application/json", Authorization: "Bearer " + (token || "") }, options.headers || {});
+        return fetch(path, options);
+      })
+      .then(function (res) {
+        if (res.status === 401) {
+          redirectToSignIn();
+          throw new Error("unauthorized");
+        }
+        return res.json().then(function (data) {
+          return { ok: res.ok, status: res.status, data: data };
+        });
       });
-    });
   }
 
   var appInitialized = false;
@@ -169,9 +153,10 @@
   }
 
   function setupSettings() {
-    document.getElementById("forget-token").addEventListener("click", function () {
-      localStorage.removeItem(TOKEN_KEY);
-      location.reload();
+    var user = authApi.getCurrentUser();
+    document.getElementById("settings-owner-email").textContent = (user && user.email) || "(unknown)";
+    document.getElementById("sign-out-btn").addEventListener("click", function () {
+      authApi.signOutUser().then(redirectToSignIn);
     });
   }
 
@@ -252,23 +237,14 @@
     function send(message, confirmed) {
       status.textContent = "Thinking…";
       sendBtn.disabled = true;
-      return fetch("/api/ai", {
+      return apiFetch("/api/ai", {
         method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: "Bearer " + getToken() },
         body: JSON.stringify({ message: message, sessionId: getSessionId(), timezone: timezone(), confirmed: !!confirmed }),
       })
         .then(function (res) {
-          if (res.status === 401) {
-            localStorage.removeItem(TOKEN_KEY);
-            showGate("That token was rejected.");
-            throw new Error("unauthorized");
-          }
-          return res.json();
-        })
-        .then(function (data) {
           status.textContent = "";
           sendBtn.disabled = false;
-          handleResponse(message, data);
+          handleResponse(message, res.data);
         })
         .catch(function (err) {
           status.textContent = "";
@@ -545,9 +521,23 @@
     sectionRefreshers.knowledge = render;
   }
 
-  if (getToken()) {
-    showApp();
-  } else {
-    showGate(null);
-  }
+  // Boot sequence: never render the private dashboard before Firebase has
+  // actually reported an auth state. The gate's "Checking sign-in
+  // status…" markup stays on screen for the (typically brief) time this
+  // takes — there is no path that shows app content first.
+  window.__ashokAuthReady.then(function (api) {
+    authApi = api;
+    return api.waitForInitialState().then(function (user) {
+      if (!user) {
+        redirectToSignIn();
+        return;
+      }
+      showApp();
+      // If the session ends elsewhere (revoked, signed out in another
+      // tab), leave immediately rather than let stale UI sit there.
+      api.onChange(function (nextUser) {
+        if (!nextUser) redirectToSignIn();
+      });
+    });
+  });
 })();

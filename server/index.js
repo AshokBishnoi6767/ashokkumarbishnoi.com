@@ -1,15 +1,15 @@
 "use strict";
 
 // The actual runtime this product needed: a real server sitting in front
-// of the existing learning-core Control/Intelligence Layer. Zero external
-// dependencies — Node's built-in http module only.
+// of the existing learning-core Control/Intelligence Layer. Node's built-in
+// http module for routing; Firebase Admin/Auth for the owner identity
+// boundary — see integration/auth/firebaseAdmin.js and ownerAccount.js.
 //
 // Local development / testing only. Not wired to Firebase Hosting or any
 // production deployment — see the final report for why (open decision).
 const http = require("http");
 const fs = require("fs");
 const path = require("path");
-const crypto = require("crypto");
 const { randomUUID } = require("crypto");
 
 const privateAgent = require("../learning-core/core/privateAgent");
@@ -22,18 +22,45 @@ const { listPendingApprovals, listAllApprovals } = require("../learning-core/int
 const { approveAction, rejectAction } = require("../learning-core/integration/actions/lifecycle");
 const memoryStore = require("../learning-core/memory/store");
 const { MemoryClass } = require("../learning-core/shared/constants");
+const firebaseAdmin = require("../learning-core/integration/auth/firebaseAdmin");
+const ownerAccount = require("../learning-core/integration/auth/ownerAccount");
 
 const REPO_ROOT = path.join(__dirname, "..");
 const PUBLIC_DIR = path.join(REPO_ROOT, "public");
 const DASHBOARD_DIR = path.join(REPO_ROOT, "dashboard");
 const PORT = process.env.PORT ? Number(process.env.PORT) : 8787;
 
-// This app's OWN access-control secret — not a third-party credential.
-// Generated fresh each process start if not supplied, and never written
-// to disk or logged again after this one startup line.
-const ADMIN_API_TOKEN = process.env.ADMIN_API_TOKEN || crypto.randomBytes(24).toString("hex");
-if (!process.env.ADMIN_API_TOKEN) {
-  console.log(`\n[server] No ADMIN_API_TOKEN set — generated one for this run only:\n  ${ADMIN_API_TOKEN}\n  Use it as: Authorization: Bearer ${ADMIN_API_TOKEN}\n`);
+// Firebase web config is NOT a secret — it identifies the project to the
+// client SDK; real security comes from Firebase Auth + the owner-uid check
+// below, never from hiding this. Registered via `firebase apps:create WEB`
+// against the project this repo already deploys to (see .firebaserc) — no
+// second Firebase project was created.
+const FIREBASE_WEB_CONFIG = {
+  apiKey: "AIzaSyAcHA3ob3vIf2zOSF0fLqx9yoTrAJKr1Gk",
+  authDomain: "project-5d70366f-a6e4-4264-a35.firebaseapp.com",
+  projectId: "project-5d70366f-a6e4-4264-a35",
+  appId: "1:232056650491:web:ec5cf80c29952a063b0e5e",
+};
+
+// The ONLY private-API authorization boundary: a verified Firebase ID
+// token whose uid matches the single configured owner. Nothing supplied by
+// the browser (user_id, email, role) is ever trusted — identity comes
+// exclusively from firebaseAdmin.verifyIdToken(), which itself calls the
+// real Firebase Admin SDK (or the Auth emulator in dev/test).
+async function authorizeOwnerRequest(req) {
+  const header = req.headers["authorization"] || "";
+  if (!header.startsWith("Bearer ")) {
+    return { authorized: false, reason: "Missing bearer token." };
+  }
+  const idToken = header.slice("Bearer ".length);
+  const verification = await firebaseAdmin.verifyIdToken(idToken);
+  if (!verification.ok) {
+    return { authorized: false, reason: verification.reason };
+  }
+  if (!ownerAccount.isOwner(verification.uid)) {
+    return { authorized: false, reason: "Authenticated user is not the configured owner." };
+  }
+  return { authorized: true, uid: verification.uid, email: verification.email, userScope: "private:" + verification.uid };
 }
 
 const MIME_TYPES = {
@@ -79,16 +106,6 @@ function sendJson(res, statusCode, body) {
   res.end(payload);
 }
 
-function isAuthorizedPrivateRequest(req) {
-  const header = req.headers["authorization"] || "";
-  if (!header.startsWith("Bearer ")) return false;
-  const token = header.slice("Bearer ".length);
-  const tokenBuf = Buffer.from(token);
-  const expectedBuf = Buffer.from(ADMIN_API_TOKEN);
-  if (tokenBuf.length !== expectedBuf.length) return false;
-  return crypto.timingSafeEqual(tokenBuf, expectedBuf);
-}
-
 // Serves static files from a given root directory, resolving directory
 // requests to index.html (matching Firebase Hosting's clean-URL behavior)
 // and rejecting any path that escapes the root.
@@ -132,10 +149,52 @@ async function requestHandler(req, res) {
   const url = req.url || "/";
 
   try {
+    // --- Authentication surface: public, but deliberately tiny. ---
+    if (req.method === "GET" && url === "/api/auth/config") {
+      return sendJson(res, 200, { ...FIREBASE_WEB_CONFIG, ownerConfigured: ownerAccount.isOwnerConfigured() });
+    }
+
+    // First-time owner setup ONLY. Server-controlled, not a public
+    // registration form: the owner-already-configured check happens here,
+    // before any Firebase user is created, and again atomically inside
+    // ownerAccount.setupOwner() to close the race window. After the first
+    // successful call, this endpoint always refuses.
+    if (req.method === "POST" && url === "/api/auth/setup-owner") {
+      if (ownerAccount.isOwnerConfigured()) {
+        return sendJson(res, 409, { status: "OWNER_ALREADY_CONFIGURED", reason: "Owner setup has already been completed." });
+      }
+      const body = await readJsonBody(req).catch((err) => ({ __error: err.message }));
+      if (body.__error || typeof body.email !== "string" || typeof body.password !== "string" || body.password.length < 6) {
+        return sendJson(res, 400, {
+          status: "INVALID_REQUEST",
+          reason: body.__error || "email and a password of at least 6 characters are required.",
+        });
+      }
+      const created = await firebaseAdmin.createUser({ email: body.email, password: body.password });
+      if (!created.ok) {
+        logger.warn("owner_setup_failed", { correlationId, reason: created.reason });
+        return sendJson(res, 502, { status: "SETUP_FAILED", reason: created.reason });
+      }
+      const setup = ownerAccount.setupOwner({ uid: created.uid, email: created.email });
+      if (!setup.ok) {
+        // Race: another request completed setup between the check above and now.
+        return sendJson(res, 409, { status: "OWNER_ALREADY_CONFIGURED", reason: setup.reason });
+      }
+      logger.info("owner_setup", { correlationId, uid: created.uid });
+      return sendJson(res, 200, { status: "OWNER_CREATED", email: created.email });
+    }
+
+    if (req.method === "GET" && url === "/api/auth/me") {
+      const auth = await authorizeOwnerRequest(req);
+      if (!auth.authorized) return sendJson(res, 401, { status: "UNAUTHORIZED", reason: auth.reason });
+      return sendJson(res, 200, { uid: auth.uid, email: auth.email });
+    }
+
     if (req.method === "POST" && url === "/api/ai") {
-      if (!isAuthorizedPrivateRequest(req)) {
-        logger.warn("private_ai_unauthorized", { correlationId });
-        return sendJson(res, 401, { status: "UNAUTHORIZED", reason: "Missing or invalid bearer token." });
+      const auth = await authorizeOwnerRequest(req);
+      if (!auth.authorized) {
+        logger.warn("private_ai_unauthorized", { correlationId, reason: auth.reason });
+        return sendJson(res, 401, { status: "UNAUTHORIZED", reason: auth.reason });
       }
       const body = await readJsonBody(req).catch((err) => ({ __error: err.message }));
       if (body.__error || typeof body.message !== "string") {
@@ -149,8 +208,10 @@ async function requestHandler(req, res) {
         confirmed: body.confirmed === true,
         testScenario: typeof body.testScenario === "string" ? body.testScenario : null,
         attachments: Array.isArray(body.attachments) ? body.attachments : [],
+        userScope: auth.userScope,
+        requestedBy: auth.email || auth.uid,
       });
-      logger.info("private_ai_request", { correlationId, sessionId, status: result.status });
+      logger.info("private_ai_request", { correlationId, sessionId, uid: auth.uid, status: result.status });
       return sendJson(res, 200, { ...result, sessionId });
     }
 
@@ -170,20 +231,18 @@ async function requestHandler(req, res) {
     }
 
     // Everything below is private dashboard data (activity, approvals,
-    // memory) — same bearer-token boundary as /api/ai, never reachable
-    // anonymously.
+    // memory) — same verified-owner boundary as /api/ai, never reachable
+    // anonymously and never reachable by an authenticated non-owner user.
     if (req.method === "GET" && url === "/api/audit") {
-      if (!isAuthorizedPrivateRequest(req)) {
-        return sendJson(res, 401, { status: "UNAUTHORIZED", reason: "Missing or invalid bearer token." });
-      }
+      const auth = await authorizeOwnerRequest(req);
+      if (!auth.authorized) return sendJson(res, 401, { status: "UNAUTHORIZED", reason: auth.reason });
       const entries = listAudit().slice(-200).reverse();
       return sendJson(res, 200, { audit: entries });
     }
 
     if (req.method === "GET" && url === "/api/approvals") {
-      if (!isAuthorizedPrivateRequest(req)) {
-        return sendJson(res, 401, { status: "UNAUTHORIZED", reason: "Missing or invalid bearer token." });
-      }
+      const auth = await authorizeOwnerRequest(req);
+      if (!auth.authorized) return sendJson(res, 401, { status: "UNAUTHORIZED", reason: auth.reason });
       const pending = listPendingApprovals();
       const history = listAllApprovals()
         .filter((a) => a.status !== "PENDING")
@@ -193,46 +252,48 @@ async function requestHandler(req, res) {
 
     const approvalDecisionMatch = req.method === "POST" && url.match(/^\/api\/approvals\/([^/?]+)\/decision$/);
     if (approvalDecisionMatch) {
-      if (!isAuthorizedPrivateRequest(req)) {
-        return sendJson(res, 401, { status: "UNAUTHORIZED", reason: "Missing or invalid bearer token." });
-      }
+      const auth = await authorizeOwnerRequest(req);
+      if (!auth.authorized) return sendJson(res, 401, { status: "UNAUTHORIZED", reason: auth.reason });
       const approvalId = decodeURIComponent(approvalDecisionMatch[1]);
       const body = await readJsonBody(req).catch((err) => ({ __error: err.message }));
       if (body.__error || (body.decision !== "approve" && body.decision !== "reject")) {
         return sendJson(res, 400, { status: "INVALID_REQUEST", reason: body.__error || "decision must be 'approve' or 'reject'." });
       }
       const outcome =
-        body.decision === "approve" ? await approveAction(approvalId) : rejectAction(approvalId, { rejectedBy: "ashok" });
+        body.decision === "approve" ? await approveAction(approvalId) : rejectAction(approvalId, { rejectedBy: auth.email || auth.uid });
       logger.info("approval_decision", { correlationId, approvalId, decision: body.decision, status: outcome.status });
       if (outcome.status === "NOT_FOUND") return sendJson(res, 404, outcome);
       return sendJson(res, 200, outcome);
     }
 
     if (req.method === "GET" && url === "/api/memory") {
-      if (!isAuthorizedPrivateRequest(req)) {
-        return sendJson(res, 401, { status: "UNAUTHORIZED", reason: "Missing or invalid bearer token." });
-      }
+      const auth = await authorizeOwnerRequest(req);
+      if (!auth.authorized) return sendJson(res, 401, { status: "UNAUTHORIZED", reason: auth.reason });
       const records = Object.values(MemoryClass).flatMap((memoryClass) =>
-        memoryStore.query(memoryClass, () => true).map((record) => ({ ...record, memory_class: memoryClass }))
+        memoryStore.query(memoryClass, (r) => r.user_scope === auth.userScope).map((record) => ({ ...record, memory_class: memoryClass }))
       );
       return sendJson(res, 200, { memory: records });
     }
 
     // The owner's explicit "remove this" — see learning-core/memory/store.js
     // forget(): distinct from a correction's supersession, which keeps the
-    // old record for provenance. This deletes it outright.
+    // old record for provenance. This deletes it outright, and only if the
+    // record actually belongs to the authenticated owner's scope.
     const memoryDeleteMatch = req.method === "DELETE" && url.match(/^\/api\/memory\/([^/?]+)\/([^/?]+)$/);
     if (memoryDeleteMatch) {
-      if (!isAuthorizedPrivateRequest(req)) {
-        return sendJson(res, 401, { status: "UNAUTHORIZED", reason: "Missing or invalid bearer token." });
-      }
+      const auth = await authorizeOwnerRequest(req);
+      if (!auth.authorized) return sendJson(res, 401, { status: "UNAUTHORIZED", reason: auth.reason });
       const memoryClass = decodeURIComponent(memoryDeleteMatch[1]);
       const memoryId = decodeURIComponent(memoryDeleteMatch[2]);
       if (!MemoryClass[memoryClass]) {
         return sendJson(res, 400, { status: "INVALID_REQUEST", reason: `Unknown memory class: ${memoryClass}` });
       }
+      const existing = memoryStore.recall(memoryClass, memoryId);
+      if (!existing || existing.user_scope !== auth.userScope) {
+        return sendJson(res, 404, { status: "NOT_FOUND" });
+      }
       const deleted = memoryStore.forget(memoryClass, memoryId);
-      logger.info("memory_forget", { correlationId, memoryClass, memoryId, deleted });
+      logger.info("memory_forget", { correlationId, memoryClass, memoryId, deleted, uid: auth.uid });
       if (!deleted) return sendJson(res, 404, { status: "NOT_FOUND" });
       return sendJson(res, 200, { status: "DELETED" });
     }
@@ -255,8 +316,13 @@ if (require.main === module) {
   server.listen(PORT, () => {
     console.log(`[server] listening on http://localhost:${PORT}`);
     console.log(`[server] public site:     http://localhost:${PORT}/`);
-    console.log(`[server] private dashboard: http://localhost:${PORT}/dashboard`);
+    console.log(`[server] private dashboard: http://localhost:${PORT}/dashboard (sign in required)`);
+    if (!process.env.FIREBASE_AUTH_EMULATOR_HOST) {
+      console.log(
+        "[server] FIREBASE_AUTH_EMULATOR_HOST is not set — sign-in will try to reach real Firebase Auth, which requires it to be enabled in the Firebase Console first (see the final report)."
+      );
+    }
   });
 }
 
-module.exports = { server, requestHandler, ADMIN_API_TOKEN };
+module.exports = { server, requestHandler, FIREBASE_WEB_CONFIG };

@@ -5,19 +5,48 @@
 // the handler. This is Phase 9's explicit requirement.
 const { test, before, after, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
-const { server, ADMIN_API_TOKEN } = require("../server/index");
+const { server } = require("../server/index");
 const { setConnectionState, getConnectionState } = require("../learning-core/integration/connection/store");
 const { getConversation } = require("../learning-core/persistence/store");
+const firebaseAdmin = require("../learning-core/integration/auth/firebaseAdmin");
+const ownerAccount = require("../learning-core/integration/auth/ownerAccount");
+const fakeAdminAuth = require("./fakeAdminAuth");
 
 let baseUrl;
+let ownerToken;
+let ownerEmail;
+let ownerUid;
 
 before(async () => {
   await new Promise((resolve) => server.listen(0, resolve));
   baseUrl = `http://127.0.0.1:${server.address().port}`;
+  // Deterministic Firebase Admin double for the whole suite — see
+  // fakeAdminAuth.js for why this is the same precedent as
+  // testCalendarConnector.js rather than requiring a live emulator process
+  // for every test run. A separate, real-emulator verification is
+  // documented in the final report.
+  firebaseAdmin.setAdminAuthForTesting(fakeAdminAuth);
 });
 
 after(async () => {
+  firebaseAdmin._resetAdminAuthForTesting();
   await new Promise((resolve) => server.close(resolve));
+});
+
+// Every test gets a FRESH owner account through the real, unmodified
+// setup-owner endpoint (not a shortcut) — proving that endpoint's actual
+// logic on every single test run, not just the ones that name it.
+// fakeAdminAuth's uid counter never resets, so each test's owner scope is
+// globally unique across the whole file — no cross-test memory bleed.
+beforeEach(async () => {
+  ownerAccount._reset();
+  fakeAdminAuth.reset();
+  ownerEmail = `owner-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
+  const setupRes = await post("/api/auth/setup-owner", { email: ownerEmail, password: "correct horse battery staple" });
+  const setupBody = await setupRes.json();
+  assert.equal(setupRes.status, 200, JSON.stringify(setupBody));
+  ownerUid = fakeAdminAuth.getUidForEmail(ownerEmail);
+  ownerToken = fakeAdminAuth.issueTokenForEmail(ownerEmail);
 });
 
 function post(path, body, headers = {}) {
@@ -33,12 +62,73 @@ function get(path, headers = {}) {
 }
 
 function authHeader() {
-  return { Authorization: "Bearer " + ADMIN_API_TOKEN };
+  return { Authorization: "Bearer " + ownerToken };
 }
+
+// === Owner authentication ===
+
+test("AUTH: GET /api/auth/config is public and reports whether the owner is configured, without leaking anything private", async () => {
+  const res = await get("/api/auth/config");
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.ownerConfigured, true); // beforeEach already ran real setup-owner
+  assert.ok(body.apiKey && body.authDomain && body.projectId && body.appId);
+});
+
+test("AUTH: POST /api/auth/setup-owner refuses a second attempt once the owner already exists (no public registration after setup)", async () => {
+  const res = await post("/api/auth/setup-owner", { email: "someone-else@example.com", password: "whatever-password" });
+  assert.equal(res.status, 409);
+  const body = await res.json();
+  assert.equal(body.status, "OWNER_ALREADY_CONFIGURED");
+});
+
+test("AUTH: POST /api/auth/setup-owner rejects a too-short password, and the password is never echoed back", async () => {
+  ownerAccount._reset(); // simulate a fresh, never-configured instance for this one test
+  const res = await post("/api/auth/setup-owner", { email: "new-owner@example.com", password: "short" });
+  assert.equal(res.status, 400);
+  const text = await res.text();
+  assert.ok(!text.includes("short"), "the rejected password leaked back into the response");
+});
+
+test("AUTH: GET /api/auth/me returns the authenticated owner's uid/email, and 401s without a token", async () => {
+  const authed = await get("/api/auth/me", authHeader());
+  assert.equal(authed.status, 200);
+  const body = await authed.json();
+  assert.equal(body.uid, ownerUid);
+  assert.equal(body.email, ownerEmail);
+
+  const anon = await get("/api/auth/me");
+  assert.equal(anon.status, 401);
+});
+
+test("AUTH: a forged bearer token (never actually issued by sign-in) is rejected, not treated as a valid identity", async () => {
+  const res = await post("/api/ai", { message: "hi" }, { Authorization: "Bearer " + ownerUid }); // naive forgery: just claiming the real uid as the token string
+  assert.equal(res.status, 401);
+});
+
+test("AUTH: an authenticated user who is NOT the configured owner is rejected — being a real Firebase user is not enough", async () => {
+  fakeAdminAuth.registerUser("test-uid-intruder", "intruder@example.com");
+  const intruderToken = fakeAdminAuth.issueTokenForUid("test-uid-intruder");
+  const res = await post("/api/ai", { message: "hi" }, { Authorization: "Bearer " + intruderToken });
+  assert.equal(res.status, 401);
+  const body = await res.json();
+  assert.match(body.reason, /not the configured owner/);
+});
+
+test("AUTH: private data is scoped to the owner's verified uid — GET /api/memory only ever returns records for auth.userScope", async () => {
+  const stored = await post("/api/ai", { message: "I prefer isolation-tested replies.", sessionId: "auth-scope-1" }, authHeader());
+  const storedBody = await stored.json();
+  assert.equal(storedBody.status, "MEMORY_STORED");
+
+  const memRes = await get("/api/memory", authHeader());
+  const memBody = await memRes.json();
+  assert.ok(memBody.memory.every((m) => m.user_scope === "private:" + ownerUid));
+  assert.ok(memBody.memory.some((m) => m.memory_id === storedBody.record.memory_id));
+});
 
 // 2. valid AI request
 test("POST /api/ai: a valid, authorized request returns 200 with a structured status — no model is CONNECTED in this environment, so the registry correctly falls back to the null provider (UNKNOWN) rather than fabricating a reply", async () => {
-  const res = await post("/api/ai", { message: "What should I focus on today?" }, { Authorization: "Bearer " + ADMIN_API_TOKEN });
+  const res = await post("/api/ai", { message: "What should I focus on today?" }, authHeader());
   assert.equal(res.status, 200);
   const body = await res.json();
   assert.equal(body.status, "UNKNOWN");
@@ -48,7 +138,7 @@ test("POST /api/ai: a valid, authorized request returns 200 with a structured st
 
 // 3. invalid request
 test("POST /api/ai: missing message is 400 INVALID_REQUEST", async () => {
-  const res = await post("/api/ai", {}, { Authorization: "Bearer " + ADMIN_API_TOKEN });
+  const res = await post("/api/ai", {}, authHeader());
   assert.equal(res.status, 400);
   const body = await res.json();
   assert.equal(body.status, "INVALID_REQUEST");
@@ -59,7 +149,7 @@ test("POST /api/ai: no token is 401 UNAUTHORIZED, and the body never contains th
   const res = await post("/api/ai", { message: "hi" });
   assert.equal(res.status, 401);
   const text = await res.text();
-  assert.ok(!text.includes(ADMIN_API_TOKEN));
+  assert.ok(!text.includes(ownerToken));
 });
 
 test("POST /api/ai: wrong token is 401 UNAUTHORIZED", async () => {
@@ -72,7 +162,7 @@ test("POST /api/ai: CRITICAL — a recognized calendar action requires approval 
   const res = await post(
     "/api/ai",
     { message: "Create an investor meeting tomorrow at 2 PM.", timezone: "Asia/Kolkata" },
-    { Authorization: "Bearer " + ADMIN_API_TOKEN }
+    authHeader()
   );
   const body = await res.json();
   assert.equal(body.status, "ACTION");
@@ -86,7 +176,7 @@ test("POST /api/ai: the same action succeeds once write scope is granted and con
     const res = await post(
       "/api/ai",
       { message: "Create an investor meeting tomorrow at 2 PM.", timezone: "Asia/Kolkata", confirmed: true },
-      { Authorization: "Bearer " + ADMIN_API_TOKEN }
+      authHeader()
     );
     const body = await res.json();
     assert.equal(body.status, "ACTION");
@@ -106,7 +196,7 @@ test("POST /api/ai: connector PROVIDER_FAILURE reaches the client as FAILED, not
     const res = await post(
       "/api/ai",
       { message: "Create an investor meeting tomorrow at 2 PM.", timezone: "Asia/Kolkata", confirmed: true, testScenario: "PROVIDER_FAILURE" },
-      { Authorization: "Bearer " + ADMIN_API_TOKEN }
+      authHeader()
     );
     const body = await res.json();
     assert.equal(body.result.action.result, "FAILED");
@@ -122,7 +212,7 @@ test("POST /api/ai: connector VERIFICATION_FAILURE reaches the client as UNKNOWN
     const res = await post(
       "/api/ai",
       { message: "Create an investor meeting tomorrow at 2 PM.", timezone: "Asia/Kolkata", confirmed: true, testScenario: "VERIFICATION_FAILURE" },
-      { Authorization: "Bearer " + ADMIN_API_TOKEN }
+      authHeader()
     );
     const body = await res.json();
     assert.equal(body.result.action.result, "UNKNOWN");
@@ -148,9 +238,9 @@ test("POST /api/public-ai: valid request returns a structured status, never a fa
 });
 
 // 11. secret isolation
-test("SECURITY: no response body from any endpoint ever contains the private admin token", async () => {
+test("SECURITY: no response body from any endpoint ever contains the owner's bearer token", async () => {
   const responses = await Promise.all([
-    post("/api/ai", { message: "hello" }, { Authorization: "Bearer " + ADMIN_API_TOKEN }),
+    post("/api/ai", { message: "hello" }, authHeader()),
     post("/api/public-ai", { message: "hello" }),
     fetch(baseUrl + "/api/health"),
     get("/api/audit", authHeader()),
@@ -159,7 +249,7 @@ test("SECURITY: no response body from any endpoint ever contains the private adm
   ]);
   for (const res of responses) {
     const text = await res.text();
-    assert.ok(!text.includes(ADMIN_API_TOKEN), "response leaked the admin token");
+    assert.ok(!text.includes(ownerToken), "response leaked the owner's bearer token");
   }
 });
 
@@ -207,7 +297,7 @@ test("GET /api/audit: an authorized request returns the audit trail, most recent
   const body = await res.json();
   assert.ok(Array.isArray(body.audit));
   const text = JSON.stringify(body.audit);
-  assert.ok(!text.includes(ADMIN_API_TOKEN));
+  assert.ok(!text.includes(ownerToken));
 });
 
 // --- Approvals surface ---

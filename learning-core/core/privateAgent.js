@@ -2,9 +2,12 @@
 
 // PRIVATE agent — full access to the Control Layer's action pipeline
 // (through the existing, unmodified Tool Router / Action Lifecycle) and to
-// Ashok's own conversation history and memory. Never reachable by anonymous
-// visitors — the server enforces that boundary (see server/index.js), not
-// this file.
+// the owner's own conversation history and memory. Never reachable by
+// anonymous visitors — the server enforces that boundary (see
+// server/index.js) by deriving userScope from a verified Firebase ID
+// token's uid before this function is ever called. Nothing in this file
+// trusts a userScope supplied by anything other than that server-side
+// verification step.
 //
 // Personal Intelligence Layer: preference/decision/correction capture and
 // relevant-memory retrieval below are deterministic pattern matches, the
@@ -26,11 +29,16 @@ const knowledge = require("../knowledge/graph");
 const { createInput } = require("../input/schema");
 const { MemoryClass, TruthState, Modality } = require("../shared/constants");
 
+// Fallback identity for direct/unit-level callers only (e.g. tests that
+// exercise memory/intent logic without going through HTTP auth at all).
+// The real security boundary is server/index.js: every real request's
+// userScope is derived from a verified Firebase ID token's uid, never from
+// this default, and never from anything the browser supplies directly.
 const USER_SCOPE = "private:ashok";
 
 function buildSystemPrompt(relevantMemories) {
   const lines = [
-    "You are Ashok's private AI agent, running inside his personal command center.",
+    "You are the owner's private AI agent, running inside their personal command center.",
     "You have a real memory system. Below is exactly what's stored and relevant to this message — nothing else exists beyond it and this conversation. Treat KNOWN/VERIFIED items as established. Treat HYPOTHESIS/POSSIBLE items as your own past guesses, not confirmed truth, and say so if you rely on one.",
     "You cannot execute any action yourself. A separate, deterministic authorization system decides what may actually run; you may only describe or propose.",
     "Never invent a preference, project, decision, or memory that isn't listed below or stated in this conversation. If you don't know something, say so plainly instead of guessing.",
@@ -58,7 +66,7 @@ function summarizeContext(relevantMemories) {
 // never silently upgraded to fact. This module does not perform real OCR/
 // ASR/vision itself — no such provider is connected — it guarantees the
 // epistemic distinction is preserved once content does arrive.
-function captureAttachments(attachments, sessionId) {
+function captureAttachments(attachments, sessionId, userScope) {
   const stored = [];
   for (const attachment of attachments) {
     if (!attachment || typeof attachment !== "object") continue;
@@ -69,7 +77,7 @@ function captureAttachments(attachments, sessionId) {
       modality,
       source: "user_upload",
       sessionId,
-      userScope: USER_SCOPE,
+      userScope,
       content: { observation: observation || null, inference: inference || null },
       originalReference: reference || null,
     });
@@ -84,7 +92,7 @@ function captureAttachments(attachments, sessionId) {
           context: { modality, original_reference: reference || null },
           truthState: TruthState.KNOWN,
           confidence: 1,
-          userScope: USER_SCOPE,
+          userScope,
         })
       );
     }
@@ -98,7 +106,7 @@ function captureAttachments(attachments, sessionId) {
           context: { modality, original_reference: reference || null },
           truthState: TruthState.HYPOTHESIS,
           confidence: 0.4,
-          userScope: USER_SCOPE,
+          userScope,
         })
       );
     }
@@ -113,11 +121,11 @@ function captureAttachments(attachments, sessionId) {
 // correction is also always recorded as a learning event distinct from a
 // plain preference update, per learning/events.js's existing "candidate,
 // never auto-promoted" contract.
-function captureCorrection(text, sessionId) {
+function captureCorrection(text, sessionId, userScope) {
   const extraction = extractCorrection(text);
   if (!extraction.matched) return null;
 
-  const [previous] = retrieveRelevantMemory({ userScope: USER_SCOPE, text: extraction.statement, limit: 1 });
+  const [previous] = retrieveRelevantMemory({ userScope, text: extraction.statement, limit: 1 });
   let record;
   if (previous) {
     memoryStore.update(previous.memory_class, previous.memory_id, { status: "superseded" });
@@ -128,7 +136,7 @@ function captureCorrection(text, sessionId) {
       sourceReference: sessionId,
       truthState: TruthState.KNOWN,
       confidence: 0.9,
-      userScope: USER_SCOPE,
+      userScope,
       relatedMemories: [previous.memory_id],
     });
   } else {
@@ -139,7 +147,7 @@ function captureCorrection(text, sessionId) {
       sourceReference: sessionId,
       truthState: TruthState.KNOWN,
       confidence: 0.7,
-      userScope: USER_SCOPE,
+      userScope,
     });
   }
   const learningEvent = recordCorrection({ previousClaim: previous ? previous.content : null, correction: extraction.statement, source: "conversation" });
@@ -149,7 +157,7 @@ function captureCorrection(text, sessionId) {
 // Decision: recorded as something that happened (EPISODIC), plus a
 // knowledge-graph relationship so it participates in entity/relationship
 // continuity ("Project A -> decision Y was made"), not just a text blob.
-function captureDecision(text, sessionId) {
+function captureDecision(text, sessionId, userScope, requestedBy) {
   const extraction = extractDecisionStatement(text);
   if (!extraction.matched) return null;
   const record = memoryStore.remember(MemoryClass.EPISODIC, {
@@ -159,9 +167,9 @@ function captureDecision(text, sessionId) {
     sourceReference: sessionId,
     truthState: TruthState.KNOWN,
     confidence: 0.9,
-    userScope: USER_SCOPE,
+    userScope,
   });
-  knowledge.assertRelationship("ashok", "decided", extraction.statement, { source: "conversation", confidence: 0.9 });
+  knowledge.assertRelationship(requestedBy, "decided", extraction.statement, { source: "conversation", confidence: 0.9 });
   return { record };
 }
 
@@ -171,11 +179,11 @@ function captureDecision(text, sessionId) {
 // silently: the old record is superseded (not deleted) and linked, and the
 // reply explicitly names both the old and new value so the change is
 // always visible, never a silent overwrite.
-function capturePreference(text, sessionId) {
+function capturePreference(text, sessionId, userScope) {
   const extraction = extractPreferenceStatement(text);
   if (!extraction.matched) return null;
 
-  const [previous] = retrieveRelevantMemoryInClass({ userScope: USER_SCOPE, text: extraction.statement, memoryClass: MemoryClass.PREFERENCE, limit: 1 });
+  const [previous] = retrieveRelevantMemoryInClass({ userScope, text: extraction.statement, memoryClass: MemoryClass.PREFERENCE, limit: 1 });
   const changed = previous && previous.content.trim().toLowerCase() !== extraction.statement.trim().toLowerCase();
   if (previous) {
     memoryStore.update(MemoryClass.PREFERENCE, previous.memory_id, { status: "superseded" });
@@ -187,20 +195,33 @@ function capturePreference(text, sessionId) {
     sourceReference: sessionId,
     truthState: TruthState.KNOWN,
     confidence: 0.85,
-    userScope: USER_SCOPE,
+    userScope,
     relatedMemories: previous ? [previous.memory_id] : [],
   });
   return { record, previous: changed ? previous : null };
 }
 
-async function handleMessage({ message, sessionId, timezone = null, confirmed = false, testScenario = null, attachments = [] }) {
+// userScope and requestedBy are the two identity inputs — both must come
+// from server/index.js's verified-token derivation for any real request.
+// Defaults exist only so direct/unit-level tests don't need to fabricate a
+// fake verified identity just to exercise memory/intent logic.
+async function handleMessage({
+  message,
+  sessionId,
+  timezone = null,
+  confirmed = false,
+  testScenario = null,
+  attachments = [],
+  userScope = USER_SCOPE,
+  requestedBy = "ashok",
+}) {
   if (typeof message !== "string" || !message.trim()) {
     return { status: "INVALID_REQUEST", reason: "message is required and must be a non-empty string." };
   }
 
-  appendMessage(sessionId, USER_SCOPE, { role: "user", content: message });
+  appendMessage(sessionId, userScope, { role: "user", content: message });
 
-  const storedAttachments = Array.isArray(attachments) && attachments.length ? captureAttachments(attachments, sessionId) : [];
+  const storedAttachments = Array.isArray(attachments) && attachments.length ? captureAttachments(attachments, sessionId, userScope) : [];
   const withAttachments = (result) => (storedAttachments.length ? { ...result, attachments_stored: storedAttachments.length } : result);
 
   // A recognized action request goes through the existing, unmodified
@@ -209,8 +230,8 @@ async function handleMessage({ message, sessionId, timezone = null, confirmed = 
   const calendarIntent = extractCalendarCreateIntent(message);
   if (calendarIntent.matched) {
     const extraParams = testScenario ? { __test_scenario: testScenario } : {};
-    const result = await handleIntent({ text: message, requestedBy: "ashok", timezone, confirmed, params: extraParams });
-    appendMessage(sessionId, USER_SCOPE, { role: "agent", content: JSON.stringify(result), kind: "action_result" });
+    const result = await handleIntent({ text: message, requestedBy, timezone, confirmed, params: extraParams });
+    appendMessage(sessionId, userScope, { role: "agent", content: JSON.stringify(result), kind: "action_result" });
     return withAttachments({ status: "ACTION", result });
   }
 
@@ -218,12 +239,12 @@ async function handleMessage({ message, sessionId, timezone = null, confirmed = 
   // these three write anywhere except this agent's own memory store, and
   // none of them can reach the Tool Router / Action Lifecycle. Storing a
   // preference is never an authorized action; it never needs approval.
-  const correction = captureCorrection(message, sessionId);
+  const correction = captureCorrection(message, sessionId, userScope);
   if (correction) {
     const reply = correction.previous
       ? `Got it — correcting that. Previously I understood: "${correction.previous.content}". Now: "${correction.record.content}".`
       : `Got it — noted: "${correction.record.content}". (No prior matching memory to correct.)`;
-    appendMessage(sessionId, USER_SCOPE, { role: "agent", content: reply, kind: "memory_result" });
+    appendMessage(sessionId, userScope, { role: "agent", content: reply, kind: "memory_result" });
     return withAttachments({
       status: "MEMORY_STORED",
       memory_class: correction.previous ? correction.previous.memory_class : MemoryClass.SEMANTIC,
@@ -233,19 +254,19 @@ async function handleMessage({ message, sessionId, timezone = null, confirmed = 
     });
   }
 
-  const decision = captureDecision(message, sessionId);
+  const decision = captureDecision(message, sessionId, userScope, requestedBy);
   if (decision) {
     const reply = `Noted the decision: "${decision.record.content}".`;
-    appendMessage(sessionId, USER_SCOPE, { role: "agent", content: reply, kind: "memory_result" });
+    appendMessage(sessionId, userScope, { role: "agent", content: reply, kind: "memory_result" });
     return withAttachments({ status: "MEMORY_STORED", memory_class: MemoryClass.EPISODIC, record: decision.record, reply });
   }
 
-  const preference = capturePreference(message, sessionId);
+  const preference = capturePreference(message, sessionId, userScope);
   if (preference) {
     const reply = preference.previous
       ? `Got it — updating what I know. Previously: "${preference.previous.content}". Now: "${preference.record.content}".`
       : `Got it — I'll remember that: "${preference.record.content}".`;
-    appendMessage(sessionId, USER_SCOPE, { role: "agent", content: reply, kind: "memory_result" });
+    appendMessage(sessionId, userScope, { role: "agent", content: reply, kind: "memory_result" });
     return withAttachments({
       status: "MEMORY_STORED",
       memory_class: MemoryClass.PREFERENCE,
@@ -262,16 +283,16 @@ async function handleMessage({ message, sessionId, timezone = null, confirmed = 
   const basicUnderstanding = understand(message);
   if (basicUnderstanding.ambiguous) {
     const reply = `Could you clarify what you mean? ${basicUnderstanding.ambiguity_reason}`;
-    appendMessage(sessionId, USER_SCOPE, { role: "agent", content: reply, kind: "clarification" });
+    appendMessage(sessionId, userScope, { role: "agent", content: reply, kind: "clarification" });
     return withAttachments({ status: "CLARIFICATION_NEEDED", reason: basicUnderstanding.ambiguity_reason, reply });
   }
 
   // Otherwise: open-ended chat — now with relevant memory actually
   // retrieved (relevance-scored, user-scoped) and included in the system
   // prompt, not the entire store and not nothing.
-  const relevantMemories = retrieveRelevantMemory({ userScope: USER_SCOPE, text: message });
+  const relevantMemories = retrieveRelevantMemory({ userScope, text: message });
   const { provider } = pickConnected();
-  const conversation = getConversation(sessionId, USER_SCOPE);
+  const conversation = getConversation(sessionId, userScope);
   const messages = conversation.messages
     .filter((m) => m.role === "user" || m.role === "assistant")
     .map((m) => ({ role: m.role, content: m.content }));
@@ -282,7 +303,7 @@ async function handleMessage({ message, sessionId, timezone = null, confirmed = 
     return withAttachments({ status: modelResult.status, reason: modelResult.reason, context_used: summarizeContext(relevantMemories) });
   }
 
-  appendMessage(sessionId, USER_SCOPE, { role: "assistant", content: modelResult.output });
+  appendMessage(sessionId, userScope, { role: "assistant", content: modelResult.output });
   return withAttachments({ status: "SUCCESS", reply: modelResult.output, context_used: summarizeContext(relevantMemories) });
 }
 

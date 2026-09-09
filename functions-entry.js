@@ -8,15 +8,17 @@
 // relative require inside server/index.js and learning-core/ resolves
 // exactly as it does locally.
 //
-// Required at deploy time, as a real secret (not committed, not in this
-// file, not in firebase.json): ADMIN_API_TOKEN. Without it, the private
-// dashboard boundary still works — the handler generates a fresh random
-// token on every cold start (see server/index.js) — but that token
-// changes on every cold start, which is not usable in production. Set it
-// with `firebase functions:secrets:set ADMIN_API_TOKEN` before deploying
-// for real use. ANTHROPIC_API_KEY is the same kind of boundary for real
-// model replies instead of NOT_CONFIGURED.
+// The private-API boundary is now real Firebase Authentication (see
+// learning-core/integration/auth/), not an app-level static token — a
+// deployed Cloud Functions instance gets Application Default Credentials
+// automatically, so firebase-admin needs no secret at all here. The one
+// remaining credential boundary is ANTHROPIC_API_KEY, for real model
+// replies instead of NOT_CONFIGURED — set it with
+// `firebase functions:secrets:set ANTHROPIC_API_KEY` before deploying for
+// real use. Real Firebase Authentication must also be enabled once in the
+// Firebase Console before any of this works against production — see the
+// final report for that exact, one-time action.
 const { onRequest } = require("firebase-functions/v2/https");
 const { requestHandler } = require("./server/index");
 
-exports.api = onRequest({ region: "us-central1", secrets: ["ADMIN_API_TOKEN", "ANTHROPIC_API_KEY"] }, requestHandler);
+exports.api = onRequest({ region: "us-central1", secrets: ["ANTHROPIC_API_KEY"] }, requestHandler);
