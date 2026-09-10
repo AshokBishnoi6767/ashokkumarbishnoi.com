@@ -27,6 +27,7 @@ const { queryKnowledge, indexKnowledgeBySubject } = require("../realm/knowledgeQ
 const { buildContextFrame, detectUnresolvedReferences } = require("../realm/contextRealm");
 const { applyRule, applyRulesUntilFixedPoint, checkConsistency } = require("../realm/reasoningRealm");
 const { proposeHypothesis, addEvidence, groupHypothesesByProposition } = require("../realm/hypothesisRealm");
+const { verifyClaim, checkProvenance } = require("../realm/verificationRealm");
 
 function section(title) {
   console.log("\n=== " + title + " ===");
@@ -492,4 +493,40 @@ section('44. Hypothesis Realm: "I saw the man with the telescope." — two compe
 
   hManHadTelescope = addEvidence(hManHadTelescope, { contradicting: ["no telescope was mentioned as the man's possession elsewhere in context"] });
   console.log(`Hypothesis B after contradicting evidence -> status: ${hManHadTelescope.status} (still not deleted, not silently resolved)`);
+}
+
+section("45. Verification Realm: '2 + 2' — verified by actual recomputation, not by the engine having produced the claim");
+{
+  const claim = { id: "claim-arithmetic" };
+  const verifiedGood = verifyClaim(claim, { independentChecks: [{ name: "arithmetic", check: () => 2 + 2 === 4 }] });
+  const verifiedBad = verifyClaim(claim, { independentChecks: [{ name: "arithmetic", check: () => 2 + 2 === 5 }] });
+  console.log(`"2 + 2 = 4" -> ${verifiedGood.outcome}`);
+  console.log(`"2 + 2 = 5" -> ${verifiedBad.outcome}`);
+}
+
+section("46. Verification Realm: an unchecked claim is UNKNOWN, not silently trusted");
+{
+  const result = verifyClaim({ id: "claim-unchecked" });
+  console.log(`verifyClaim({id: "claim-unchecked"}) with no evidence -> ${result.outcome} (${result.reason})`);
+}
+
+section("47. Verification Realm: a claim flagged by Reasoning's own contradiction detection is CONTRADICTED here too");
+{
+  const john = { id: "entity-john", surface: "John" };
+  const toronto = { id: "entity-toronto", surface: "Toronto" };
+  const claim = { id: "know-a", subject: john, predicate: "LOCATED_IN", object: toronto, polarity: "POSITIVE" };
+  const opposite = { id: "know-b", subject: john, predicate: "LOCATED_IN", object: toronto, polarity: "NEGATIVE" };
+  const result = verifyClaim(claim, { allRecords: [claim, opposite] });
+  console.log(`verifyClaim(John LOCATED_IN Toronto, against a contradicting record) -> ${result.outcome}`);
+}
+
+section("48. Verification Realm: provenance checking is separate from truth — complete provenance is not itself VERIFIED");
+{
+  const text = "John works at Google.";
+  const { tokens } = tokenize(text);
+  const [record] = extractKnowledge(text, tokens).records;
+  const provenanceCheck = checkProvenance(record);
+  const verification = verifyClaim(record);
+  console.log(`checkProvenance -> complete: ${provenanceCheck.complete}`);
+  console.log(`verifyClaim (no independent check supplied) -> ${verification.outcome} — well-formed provenance alone never verifies a claim`);
 }
