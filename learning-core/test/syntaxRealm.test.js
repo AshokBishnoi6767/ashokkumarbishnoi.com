@@ -5,6 +5,7 @@ const assert = require("node:assert/strict");
 
 const { findNounPhrases, parseSentence } = require("../language/realm/syntaxRealm");
 const { tokenize } = require("../language/realm/tokenRealm");
+const { POSTag } = require("../language/realm/posRealm");
 
 function words(tokens) {
   return tokens.map((t) => t.text);
@@ -137,6 +138,33 @@ test("Clause structure: a multi-token subject/object span that is not a recogniz
   assert.deepEqual(words(result.clause.object.tokens), ["red", "ball"]);
   assert.equal(result.clause.object.head, null);
   assert.ok(result.clause.object.reason);
+});
+
+test("Clause structure: copula fallback — 'John is in Toronto.' has no VERB-candidate token, so the unambiguous AUX 'is' anchors the clause as pivot", () => {
+  const { tokens } = tokenize("John is in Toronto.");
+  const result = parseSentence(tokens);
+
+  assert.equal(result.clause.state, 1);
+  assert.equal(result.clause.verb.token.text, "is");
+  assert.equal(result.clause.verb.pivotType, "COPULA_AUX");
+  assert.equal(result.clause.verb.candidates.some((c) => c.tag === POSTag.AUX), true);
+});
+
+test("Clause structure: a real VERB pivot always wins over the copula fallback — pivotType is 'VERB', not 'COPULA_AUX'", () => {
+  const { tokens } = tokenize("Dog bites man.");
+  const result = parseSentence(tokens);
+  assert.equal(result.clause.verb.pivotType, "VERB");
+});
+
+test("Clause structure: two or more unambiguous AUX tokens with no VERB candidate is reported ambiguous, never a forced copula pick", () => {
+  // "should" and "must" are both single-tag CLOSED_CLASS AUX entries
+  // (unlike "can"/"will"/"may", which stay ambiguous with NOUN), and
+  // neither sentence has any other VERB-candidate token.
+  const { tokens } = tokenize("John should must.");
+  const result = parseSentence(tokens);
+  assert.equal(result.clause.state, 0);
+  assert.equal(result.clause.ambiguous, true);
+  assert.ok(result.clause.reason);
 });
 
 test("Clause structure: an imperative sentence with no subject span reports subject=null rather than forcing one", () => {

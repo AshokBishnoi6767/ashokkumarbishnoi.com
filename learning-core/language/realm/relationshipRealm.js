@@ -53,8 +53,19 @@
  * whose object span contains two [PREP, argument] chunks in sequence
  * ("works at Google in Toronto") emits two relationships sharing the
  * same subject and verb. Any leftover chunk that is neither a resolved
- * entity mention nor a lone remaining token is reported as unresolved,
- * never guessed.
+ * entity mention, a resolved noun phrase (see below), nor a lone
+ * remaining token is reported as unresolved, never guessed.
+ *
+ * === Object chunking: noun-phrase heads (Phase 1 foundation hardening) ===
+ * A chunk may also resolve via one of Syntax's own already-resolved
+ * DET+ADJ*+NOUN noun phrases, starting exactly at the current pointer —
+ * the same three-step priority resolveSubjectArgument already applies
+ * to the subject (entity mention, else syntactic head, else bare
+ * token), re-run per object chunk. Without this, a determined
+ * common-noun object ("the man" in "Dog bites the man.") could never
+ * resolve: it is neither a single bare token nor (usually) an Entity
+ * Realm mention, and this realm's object walker previously had no path
+ * to Syntax's NP resolution the way subject resolution already did.
  *
  * === On knowledge/graph.js ===
  * knowledge/graph.js's assertRelationship() stores {subject, predicate,
@@ -147,9 +158,24 @@ function buildRelationship(subjectArg, predicate, objectArg, verbToken, preposit
 // [argument] chunks. One chunk => one relationship, sharing the same
 // subject/verb. Stops (without guessing) the moment a chunk cannot be
 // resolved, recording it as unresolved rather than dropping it silently.
-function extractObjectRelationships(objectPhrase, subjectArg, verbToken, tokens, entityMentions) {
+//
+// `nounPhrases` is Syntax's own already-resolved DET+ADJ*+NOUN chunks
+// (the same data resolveSubjectArgument already consults for the
+// subject). A chunk starting exactly at `pointer` that matches one of
+// them resolves via that phrase's head — entity mention first, else the
+// syntactic head, else a bare single token, exactly the same three-step
+// priority resolveSubjectArgument already applies, just re-run per
+// object chunk. Without this, a determined common-noun object ("the
+// man" in "Dog bites the man.") could never resolve at all: it is
+// neither a single bare token nor (usually) an Entity Realm mention.
+function extractObjectRelationships(objectPhrase, subjectArg, verbToken, tokens, entityMentions, nounPhrases) {
   const relationships = [];
   const unresolved = [];
+
+  const phraseSpans = nounPhrases.map((np) => {
+    const start = tokens.indexOf(np.tokens[0]);
+    return { np, start, end: start + np.tokens.length };
+  });
 
   let pointer = tokens.indexOf(objectPhrase.tokens[0]);
   const end = pointer + objectPhrase.tokens.length;
@@ -178,6 +204,17 @@ function extractObjectRelationships(objectPhrase, subjectArg, verbToken, tokens,
       continue;
     }
 
+    const npMatch = phraseSpans.find((p) => p.start === pointer && p.end <= end);
+    if (npMatch) {
+      const headIndex = tokens.indexOf(npMatch.np.head);
+      const headEntityMatch = findEntityMentionAt(entityMentions, headIndex);
+      const argument = headEntityMatch || bareReferent(npMatch.np.head, headIndex);
+      const predicate = preposition ? `${verbUpper}_${preposition.normalized.toUpperCase()}` : verbUpper;
+      relationships.push(buildRelationship(subjectArg, predicate, argument, verbToken, preposition));
+      pointer = npMatch.end;
+      continue;
+    }
+
     const remaining = end - pointer;
     if (remaining === 1) {
       const referent = bareReferent(tokens[pointer], pointer);
@@ -189,7 +226,7 @@ function extractObjectRelationships(objectPhrase, subjectArg, verbToken, tokens,
 
     unresolved.push({
       span: { tokenStart: pointer, tokenEnd: end },
-      reason: "Multi-token remainder has no leading-preposition-headed entity and is not a single bare token; cannot determine an object without guessing.",
+      reason: "Multi-token remainder has no leading-preposition-headed entity, resolved noun phrase, or single bare token; cannot determine an object without guessing.",
     });
     break;
   }
@@ -240,7 +277,8 @@ function extractRelationships(text, tokens, options = {}) {
     subjectResolution.argument,
     clause.verb.token,
     tokens,
-    entityMentions
+    entityMentions,
+    parsed.nounPhrases
   );
 
   return {

@@ -22,14 +22,20 @@
  * inventing a number for column B/C.
  *
  * === Some cases are expected to fail, and are reported as failing ===
- * Several named benchmark sentences ("John is in Toronto.", "I saw the
- * man with the telescope.") do not parse through the real Syntax/
- * Relationship chain today — POS/Syntax's VERB detection does not
- * cover the copula ("is") or irregular past tense ("saw"); see
- * posRealm.js's own morphology-hint-driven VERB rule. That is a real,
- * measured gap in this build's syntactic coverage, not a benchmark
- * bug — it is reported as a FAIL with the exact reason, and included
- * in the accuracy score like everything else.
+ * "Penguins are birds." does not parse through the real Syntax/
+ * Relationship chain today — "Penguins" and "birds" are both plural
+ * nouns with a genuine NOUN/VERB morphological ambiguity ("-s" ->
+ * PLURAL or PRESENT_3SG; see morphologyRealm.js), so Syntax's verb-pivot
+ * search finds two VERB-candidate tokens and correctly reports the
+ * clause as ambiguous rather than guessing which one is the real verb.
+ * That is a real, measured gap in this build's syntactic coverage, not
+ * a benchmark bug — it is reported as a FAIL with the exact reason, and
+ * included in the accuracy score like everything else. (The copula and
+ * irregular-past-tense gaps this comment used to describe — "John is in
+ * Toronto.", "I saw the man with the telescope." — were closed by Phase
+ * 1 foundation hardening; see posRealm.js's IRREGULAR_VERB_FORMS,
+ * syntaxRealm.js's copula-pivot fallback, and relationshipRealm.js's
+ * noun-phrase-head object resolution.)
  */
 
 const { createSequence } = require("../language/realm/symbolRealm");
@@ -87,17 +93,16 @@ const BENCHMARK_CASES = [
   {
     id: "copula_sentence_parsing",
     category: "SYNTACTIC_VALIDITY",
-    description: "KNOWN GAP: 'John is in Toronto.' — copula ('is') is not covered by the current VERB detection rule.",
+    description: "'John is in Toronto.' — the copula ('is') anchors the clause as a pivot when no other verb exists (Phase 1 foundation hardening).",
     run: () => {
       const result = parse("John is in Toronto.");
-      // This is EXPECTED to fail today — reported honestly, not hidden.
       return { passed: result.records.length > 0, detail: { records: result.records.length, reason: result.reason } };
     },
   },
   {
     id: "telescope_ambiguity",
     category: "AMBIGUITY_DETECTION",
-    description: "KNOWN GAP: 'I saw the man with the telescope.' — irregular past tense ('saw') is not covered by VERB detection; the system never reaches PP-attachment ambiguity detection at all.",
+    description: "'I saw the man with the telescope.' — irregular past tense ('saw') and a determined common-noun object ('the man') now resolve (Phase 1 foundation hardening); real PP-attachment disambiguation (does 'with the telescope' modify 'saw' or 'man'?) remains future work — this realm honestly extracts both structural readings as separate relationships rather than picking one.",
     run: () => {
       const result = parse("I saw the man with the telescope.");
       return { passed: result.records.length > 0 || result.ambiguous === true, detail: { records: result.records.length, ambiguous: result.ambiguous, reason: result.reason } };
@@ -118,7 +123,7 @@ const BENCHMARK_CASES = [
   {
     id: "birds_fly_deduction_from_nl",
     category: "LOGICAL_VALIDITY",
-    description: "KNOWN GAP: 'All birds fly. Penguins are birds.' — same copula parsing gap prevents deriving this classic syllogism directly from natural language premises.",
+    description: "KNOWN GAP: 'All birds fly. Penguins are birds.' — 'Penguins'/'birds' are both plural nouns with genuine NOUN/VERB morphological ambiguity, so Syntax reports the verb pivot as ambiguous rather than guessing; this prevents deriving this classic syllogism directly from natural language premises.",
     run: () => {
       const premises = parse("Penguins are birds.");
       return { passed: premises.records.length > 0, detail: { records: premises.records.length, reason: premises.reason } };

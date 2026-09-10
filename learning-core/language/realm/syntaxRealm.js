@@ -43,6 +43,16 @@
  *     tokens, or more than one, is reported as unresolved rather than
  *     guessed — this is the same "never force it" principle used by
  *     every realm below.
+ *   - Copula fallback (Phase 1 foundation hardening): when the clause
+ *     has NO VERB-candidate token at all, a single unambiguous AUX token
+ *     (is/was/are/...) may serve as the pivot instead — "John is in
+ *     Toronto." has no verb other than the copula, so requiring VERB
+ *     specifically would leave every such clause permanently
+ *     unresolved. This never overrides a real VERB pivot (it only runs
+ *     after the VERB scan finds zero candidates) and two or more
+ *     unambiguous AUX tokens is still reported ambiguous, never guessed.
+ *     `clause.verb.pivotType` reports which case produced the pivot
+ *     ("VERB" or "COPULA_AUX") so callers can tell them apart.
  *   - A phrase span longer than one token is only assigned a head when
  *     it matches the DET + ADJ* + NOUN pattern exactly across its whole
  *     span. If a token within that span carries both ADJ and NOUN among
@@ -144,20 +154,44 @@ function findNounPhrases(tokens) {
 // The clause's verb pivot: the unique token (by index) whose POS
 // candidates include VERB. Zero or multiple such tokens means the
 // clause's structure is not determinable at this phase.
+// A single unambiguous copula AUX (is/was/are/...) can structurally
+// anchor a clause when no lexical verb exists anywhere in it — "John is
+// in Toronto." has no verb OTHER than the copula, so requiring a VERB
+// candidate would leave every copular clause permanently unresolved.
+// This is a hard grammatical fact (a clause needs a predicate; the
+// copula is it), not a guess: it only fires when the primary VERB scan
+// found nothing, and only when exactly one unambiguous AUX-tagged token
+// exists — two or more is reported ambiguous, same discipline as the
+// VERB case. It never overrides a real VERB pivot (see the
+// candidates.length checks above, both returned before this runs).
+function findCopulaPivot(tokens, posResults) {
+  const auxCandidates = [];
+  for (let i = 0; i < tokens.length; i += 1) {
+    if (tokens[i].type !== TokenType.WORD) continue;
+    if (isUnambiguousTag(posResults[i], POSTag.AUX)) auxCandidates.push(i);
+  }
+
+  if (auxCandidates.length === 1) {
+    return { index: auxCandidates[0], ambiguous: false, candidateIndexes: auxCandidates, reason: null, pivotType: "COPULA_AUX" };
+  }
+
+  if (auxCandidates.length > 1) {
+    return {
+      index: null,
+      ambiguous: true,
+      candidateIndexes: auxCandidates,
+      reason: "No token carries a VERB candidate, and multiple unambiguous AUX tokens could serve as a copula pivot; selecting one without further syntactic evidence would be a guess.",
+    };
+  }
+
+  return null;
+}
+
 function findVerbPivot(tokens, posResults) {
   const candidates = [];
   for (let i = 0; i < tokens.length; i += 1) {
     if (tokens[i].type !== TokenType.WORD) continue;
     if (includesTag(posResults[i], POSTag.VERB)) candidates.push(i);
-  }
-
-  if (candidates.length === 0) {
-    return {
-      index: null,
-      ambiguous: false,
-      candidateIndexes: candidates,
-      reason: "No token carries a VERB candidate; clause structure cannot be established.",
-    };
   }
 
   if (candidates.length > 1) {
@@ -169,7 +203,19 @@ function findVerbPivot(tokens, posResults) {
     };
   }
 
-  return { index: candidates[0], ambiguous: false, candidateIndexes: candidates, reason: null };
+  if (candidates.length === 1) {
+    return { index: candidates[0], ambiguous: false, candidateIndexes: candidates, reason: null };
+  }
+
+  const copulaPivot = findCopulaPivot(tokens, posResults);
+  if (copulaPivot) return copulaPivot;
+
+  return {
+    index: null,
+    ambiguous: false,
+    candidateIndexes: candidates,
+    reason: "No token carries a VERB candidate; clause structure cannot be established.",
+  };
 }
 
 // Resolves the head of an arbitrary contiguous span (a clause's subject
@@ -252,7 +298,11 @@ function parseSentence(tokens) {
     clause: {
       state: 1,
       subject,
-      verb: { token: tokens[pivot.index], candidates: posResults[pivot.index].candidates },
+      verb: {
+        token: tokens[pivot.index],
+        candidates: posResults[pivot.index].candidates,
+        pivotType: pivot.pivotType || "VERB",
+      },
       object,
       ambiguous: false,
       reason: null,

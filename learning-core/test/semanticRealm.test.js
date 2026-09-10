@@ -87,10 +87,14 @@ test("7. 'The big red ball.' -> no verb at all; remains unresolved per upstream 
   assert.ok(result.reason);
 });
 
-test("8. 'John met John.' -> honestly zero propositions ('met' is not a recognized verb pivot in this architecture); no fabricated relation", () => {
+test("8. 'John met John.' -> one proposition ('met' is a recognized irregular-verb pivot, Phase 1 foundation hardening); mention identity distinctions preserved (same surface, different subject/object ids)", () => {
   const result = extract("John met John.");
-  assert.deepEqual(result.propositions, []);
-  assert.ok(result.reason);
+  assert.equal(result.propositions.length, 1);
+  const prop = result.propositions[0];
+  assert.equal(prop.subject.surface, "John");
+  assert.equal(prop.predicate, "MET");
+  assert.equal(prop.object.surface, "John");
+  assert.notEqual(prop.subject.id, prop.object.id);
 });
 
 test("8b. 'John chased John.' -> mention identity distinctions preserved: same surface form, different subject/object ids", () => {

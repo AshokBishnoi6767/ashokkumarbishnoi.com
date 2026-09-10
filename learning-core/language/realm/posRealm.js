@@ -161,6 +161,102 @@ const CLOSED_CLASS = Object.freeze({
   not: [POSTag.PART],
 });
 
+// Irregular verb forms take no recognizable inflectional suffix (see
+// morphologyRealm.js's own documented limitation: "irregular forms are
+// not detected at this phase"), so without an entry here they resolve
+// to zero POS candidates and stay permanently UNKNOWN even in an
+// unambiguous main-verb position ("I saw the man." -> "saw" has no
+// suffix morphology could strip). This is a deliberately small,
+// curated set of common irregular past-tense/participle forms — the
+// same "not an attempt at completeness" philosophy as CLOSED_CLASS
+// above — added only where the form is not also a common noun/adjective
+// (no genuine ambiguity to preserve), so each entry carries a single
+// VERB tag, exactly like an unambiguous CLOSED_CLASS entry. Tense
+// (past vs. participle) is not distinguished here, same as morphology's
+// own PAST_TENSE/PAST_PARTICIPLE collapse into one POS candidate — that
+// is a tense question, not a POS question.
+const IRREGULAR_VERB_FORMS = Object.freeze({
+  saw: POSTag.VERB,
+  seen: POSTag.VERB,
+  went: POSTag.VERB,
+  gone: POSTag.VERB,
+  took: POSTag.VERB,
+  taken: POSTag.VERB,
+  gave: POSTag.VERB,
+  given: POSTag.VERB,
+  came: POSTag.VERB,
+  wrote: POSTag.VERB,
+  written: POSTag.VERB,
+  said: POSTag.VERB,
+  told: POSTag.VERB,
+  found: POSTag.VERB,
+  thought: POSTag.VERB,
+  knew: POSTag.VERB,
+  known: POSTag.VERB,
+  got: POSTag.VERB,
+  gotten: POSTag.VERB,
+  made: POSTag.VERB,
+  ate: POSTag.VERB,
+  eaten: POSTag.VERB,
+  ran: POSTag.VERB,
+  sat: POSTag.VERB,
+  stood: POSTag.VERB,
+  heard: POSTag.VERB,
+  felt: POSTag.VERB,
+  left: POSTag.VERB,
+  brought: POSTag.VERB,
+  bought: POSTag.VERB,
+  caught: POSTag.VERB,
+  taught: POSTag.VERB,
+  fought: POSTag.VERB,
+  won: POSTag.VERB,
+  lost: POSTag.VERB,
+  met: POSTag.VERB,
+  spoke: POSTag.VERB,
+  spoken: POSTag.VERB,
+  broke: POSTag.VERB,
+  broken: POSTag.VERB,
+  chose: POSTag.VERB,
+  chosen: POSTag.VERB,
+  drove: POSTag.VERB,
+  driven: POSTag.VERB,
+  flew: POSTag.VERB,
+  flown: POSTag.VERB,
+  grew: POSTag.VERB,
+  grown: POSTag.VERB,
+  held: POSTag.VERB,
+  kept: POSTag.VERB,
+  threw: POSTag.VERB,
+  thrown: POSTag.VERB,
+  understood: POSTag.VERB,
+  wore: POSTag.VERB,
+  worn: POSTag.VERB,
+  drew: POSTag.VERB,
+  drawn: POSTag.VERB,
+  began: POSTag.VERB,
+  begun: POSTag.VERB,
+  rang: POSTag.VERB,
+  rung: POSTag.VERB,
+  sang: POSTag.VERB,
+  sung: POSTag.VERB,
+  sank: POSTag.VERB,
+  sunk: POSTag.VERB,
+  drank: POSTag.VERB,
+  drunk: POSTag.VERB,
+  swam: POSTag.VERB,
+  swum: POSTag.VERB,
+  rode: POSTag.VERB,
+  ridden: POSTag.VERB,
+  rose: POSTag.VERB,
+  risen: POSTag.VERB,
+  fell: POSTag.VERB,
+  fallen: POSTag.VERB,
+  forgot: POSTag.VERB,
+  forgotten: POSTag.VERB,
+  hid: POSTag.VERB,
+  hidden: POSTag.VERB,
+});
+
 // morphology pos_hint values ("NOUN" | "VERB" | "ADJ") are already POSTag
 // spellings — this is intentionally an identity set, kept explicit so a
 // future divergence between the two vocabularies fails loudly rather than
@@ -278,6 +374,8 @@ function classifyToken(token, { previous } = {}) {
       rule: "CLOSED_CLASS_LEXICON",
       source: "LEXICON",
     }));
+  } else if (Object.prototype.hasOwnProperty.call(IRREGULAR_VERB_FORMS, word)) {
+    candidates = [{ tag: IRREGULAR_VERB_FORMS[word], rule: "IRREGULAR_VERB_LEXICON", source: "LEXICON" }];
   } else {
     candidates = candidatesFromMorphology(analyzeTokenMorphology(token));
   }
@@ -312,6 +410,7 @@ function tagSentence(tokens) {
 module.exports = {
   POSTag,
   CLOSED_CLASS,
+  IRREGULAR_VERB_FORMS,
   classifyToken,
   tagSentence,
 };

@@ -19,13 +19,19 @@ test("Benchmark: runBenchmark() reports an honest, non-perfect accuracy — know
   const result = runBenchmark();
   assert.equal(result.summary.total, BENCHMARK_CASES.length);
   assert.equal(result.summary.passed + result.summary.failed, result.summary.total);
-  // These are REAL, currently-existing gaps in the syntax/relationship chain
-  // (copula and irregular-past-tense verbs aren't covered by VERB detection)
-  // — asserting they fail keeps this test honest about actual capability,
-  // not aspirational.
+  // copula_sentence_parsing and telescope_ambiguity were closed by Phase 1
+  // foundation hardening (copula-as-pivot fallback, irregular-verb
+  // lexicon, NP-head object resolution — see posRealm/syntaxRealm/
+  // relationshipRealm). birds_fly_deduction_from_nl is a REAL,
+  // still-open gap: "Penguins"/"birds" are plural nouns with a genuine
+  // NOUN/VERB morphological ambiguity ("-s" -> PLURAL or PRESENT_3SG),
+  // so Syntax reports the clause's verb pivot as ambiguous rather than
+  // guessing — resolving that without inventing a heuristic is future
+  // work, not this milestone's. Asserting the real, current split keeps
+  // this test honest about actual capability, not aspirational.
   const byId = Object.fromEntries(result.results.map((r) => [r.id, r]));
-  assert.equal(byId.copula_sentence_parsing.passed, false);
-  assert.equal(byId.telescope_ambiguity.passed, false);
+  assert.equal(byId.copula_sentence_parsing.passed, true);
+  assert.equal(byId.telescope_ambiguity.passed, true);
   assert.equal(byId.birds_fly_deduction_from_nl.passed, false);
 });
 

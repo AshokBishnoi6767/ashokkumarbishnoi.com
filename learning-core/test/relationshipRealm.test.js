@@ -133,6 +133,21 @@ test("9. Entities occurring together are NOT related without clause structure co
   assert.deepEqual(result.relationships, []);
 });
 
+test("Object NP-head resolution: 'Dog bites the man.' resolves 'the man' via Syntax's already-resolved noun-phrase head, same as the bare 'man' case", () => {
+  const result = extract("Dog bites the man.");
+  assert.equal(result.relationships.length, 1);
+  const rel = result.relationships[0];
+  assert.deepEqual(simplify(rel), { subject: "Dog", predicate: "BITES", object: "man" });
+  assert.equal(rel.object.type, EntityType.UNKNOWN);
+  assert.equal(rel.object.source, "SYNTAX_HEAD");
+});
+
+test("Object NP-head resolution: 'John works at the company.' folds the preposition into the predicate exactly as it does for a named-entity object", () => {
+  const result = extract("John works at the company.");
+  assert.equal(result.relationships.length, 1);
+  assert.deepEqual(simplify(result.relationships[0]), { subject: "John", predicate: "WORKS_AT", object: "company" });
+});
+
 test("A multi-token object span with no leading preposition, no entity match, and no single-token remainder is left unresolved, not guessed", () => {
   const result = extract("Boy throws red ball.");
   assert.equal(result.state, 1);

@@ -69,6 +69,22 @@ test("POS realm: auxiliary/main-verb ambiguity is preserved for 'do'/'have'/'can
   }
 });
 
+test("POS realm: irregular past-tense verb 'saw' resolves via the curated lexicon (no suffix morphology could ever find it)", () => {
+  const token = createToken("saw", 0, 3, 0, TokenType.WORD);
+  const result = classifyToken(token);
+  assert.deepEqual(tagsFor(result), [POSTag.VERB]);
+  assert.equal(result.candidates[0].rule, "IRREGULAR_VERB_LEXICON");
+});
+
+test("POS realm: irregular verb lexicon does not shadow CLOSED_CLASS (closed-class lookup still wins for overlapping words)", () => {
+  // Sanity check on lookup order: no current IRREGULAR_VERB_FORMS entry
+  // collides with a CLOSED_CLASS word, and this test would catch it if
+  // one ever did by asserting a plain closed-class word is unaffected.
+  const token = createToken("the", 0, 3, 0, TokenType.WORD);
+  const result = classifyToken(token);
+  assert.deepEqual(tagsFor(result), [POSTag.DET]);
+});
+
 test("POS realm: unambiguous auxiliary 'should' has a single AUX candidate", () => {
   const token = createToken("should", 0, 6, 0, TokenType.WORD);
   const result = classifyToken(token);

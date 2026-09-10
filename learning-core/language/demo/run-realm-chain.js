@@ -684,6 +684,19 @@ section("60. Generation Realm: a second output kind (mathematical expressions), 
 }
 
 section("61. Model Router: task type decides the backend — deterministic engines for deterministic tasks, LLM only for open-ended generation");
+section("62. Phase 1 foundation hardening: copula pivot, irregular verbs, and NP-head object resolution close three real parsing gaps end to end");
+showRelationships("John is in Toronto.");
+console.log("  ^ previously: 'No token carries a VERB candidate' — the copula 'is' now anchors the clause when no lexical verb exists.");
+showRelationships("I saw the man with the telescope.");
+console.log("  ^ previously: 'saw' (irregular past tense) had zero POS candidates, so the clause never even reached object resolution.");
+console.log("    Two relationships, not one: this realm still does not attempt real PP-attachment disambiguation — see relationshipRealm.js.");
+showRelationships("Dog bites the man.");
+console.log("  ^ previously failed even though 'Dog bites man.' (no determiner) already worked — the object walker now reuses Syntax's");
+console.log("    already-resolved noun-phrase head the same way subject resolution always has.");
+showRelationships("Penguins are birds.");
+console.log("  ^ still honestly unresolved: 'Penguins'/'birds' both carry a genuine NOUN/VERB morphological ambiguity ('-s'), so Syntax");
+console.log("    reports the verb pivot as ambiguous rather than guessing. A documented, still-open gap, not silently papered over.");
+
 (async () => {
   const arithmetic = await routeTask({ taskType: TaskType.ARITHMETIC, args: { operation: "multiply", params: [12, 17] } });
   console.log(`ARITHMETIC(12 x 17) -> backend=${arithmetic.backend}, result=${arithmetic.result.output}`);
