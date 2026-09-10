@@ -104,6 +104,26 @@ const TruthState = Object.freeze({
   FAILED: "FAILED",
 });
 
+// Probability is a distinct mathematical concept from confidence — see
+// memory/types.js's comment on why confidence and truth_state are never
+// collapsed into each other; the same separation applies here. Until a
+// mathematically/statistically justified probability value exists
+// (e.g. from a model that actually computes one), a proposition's
+// probability field must read NOT_DEFINED — never a guessed number,
+// and never derived from confidence or uncertainty.
+const ProbabilityStatus = Object.freeze({
+  NOT_DEFINED: "NOT_DEFINED",
+});
+
+// Uncertainty is represented structurally, not computed as 1-confidence
+// or 1-probability. PRESENT is the honest default for anything that has
+// not been independently verified, regardless of how deterministic its
+// extraction was.
+const UncertaintyStatus = Object.freeze({
+  PRESENT: "PRESENT",
+  ABSENT: "ABSENT",
+});
+
 const Modality = Object.freeze({
   TEXT: "TEXT",
   IMAGE: "IMAGE",
@@ -149,6 +169,8 @@ module.exports = {
   ResultStatus,
   EventStatus,
   TruthState,
+  ProbabilityStatus,
+  UncertaintyStatus,
   Modality,
   ProcessingStatus,
   MemoryClass,

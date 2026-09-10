@@ -4,7 +4,7 @@
  * Deterministic demonstration of the realm chain built so far:
  *
  *   SYMBOL -> LEXICAL -> TOKEN -> MORPHOLOGY -> POS -> SYNTAX -> ENTITY
- *   -> RELATIONSHIP
+ *   -> RELATIONSHIP -> SEMANTIC REPRESENTATION
  *
  * Run with: node learning-core/language/demo/run-realm-chain.js
  *
@@ -20,6 +20,7 @@ const { classifyToken, tagSentence } = require("../realm/posRealm");
 const { findNounPhrases, parseSentence } = require("../realm/syntaxRealm");
 const { extractEntityMentions, groupMentionsByCandidateIdentity } = require("../realm/entityRealm");
 const { extractRelationships } = require("../realm/relationshipRealm");
+const { extractPropositions } = require("../realm/semanticRealm");
 
 function section(title) {
   console.log("\n=== " + title + " ===");
@@ -229,3 +230,47 @@ showRelationships("John and Google.");
 showRelationships("Dogs cats chase.");
 showRelationships("Boy throws red ball.");
 showRelationships("The fastest cat runs.");
+
+function showPropositions(text, opts) {
+  const { tokens } = tokenize(text);
+  const result = extractPropositions(text, tokens, opts);
+  console.log(`"${text}"`);
+  if (result.propositions.length === 0) {
+    console.log(`  (no proposition) reason: ${result.reason}${result.ambiguous ? " [ambiguous]" : ""}`);
+  }
+  for (const prop of result.propositions) {
+    console.log(
+      `  ${prop.subject.surface} --${prop.predicate}--> ${prop.object.surface}` +
+        `  | truth_state=${prop.truth_state} confidence=${prop.confidence} probability=${prop.probability} uncertainty=${prop.uncertainty}` +
+        `  | evidence.relationship_id=${prop.evidence.relationship_id} evidence.text="${prop.evidence.text}"`
+    );
+  }
+}
+
+section("22. Semantic Realm: a Relationship becomes an explicit Proposition — epistemic fields are honest, never invented");
+showPropositions("Dog bites man.");
+showPropositions("Man bites dog.");
+console.log("Same predicate, swapped roles — genuinely different propositions, exactly as at the Relationship layer.");
+
+section("23. Semantic Realm: direction still matters through the full chain");
+showPropositions("John works at Google.");
+showPropositions("Google works with John.");
+
+section("24. Semantic Realm: one clause, two propositions — boundaries preserved, never collapsed into one vague meaning");
+showPropositions("John works at Google in Toronto.");
+
+section("25. Semantic Realm: extraction from text is NOT verification — truth_state stays UNKNOWN, probability stays NOT_DEFINED, uncertainty stays PRESENT, confidence stays null (the existing architectural default), even though extraction itself was fully deterministic");
+showPropositions("John works at Google.");
+
+section("26. Semantic Realm: never manufactured — same honest failures as the Relationship Realm propagate up unchanged");
+showPropositions("John and Google.");
+showPropositions("The fastest cat runs.");
+showPropositions("The big red ball.");
+showPropositions("John met John."); // "met" is not a recognized verb pivot in this architecture — zero propositions, not a fabricated MET relation
+
+section("27. Semantic Realm: mention identity preserved even with identical surface forms");
+showPropositions("John chased John.");
+
+section("28. Semantic Realm: temporal information already resolved below is carried forward, never reinterpreted");
+showPropositions("John works at Google today.", { now: new Date("2026-09-10T12:00:00Z"), timezone: "UTC" });
+console.log("Known limitation: negation is not representable at this boundary — see semanticRealm.js module doc.");

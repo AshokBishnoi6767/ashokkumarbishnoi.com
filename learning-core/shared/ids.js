@@ -18,4 +18,5 @@ module.exports = {
   newTokenId: () => makeId("token"),
   newEntityId: () => makeId("entity"),
   newRelationshipId: () => makeId("rel"),
+  newPropositionId: () => makeId("prop"),
 };
