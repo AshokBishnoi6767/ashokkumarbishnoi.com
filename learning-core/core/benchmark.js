@@ -47,6 +47,22 @@ const { detectUnresolvedReferences } = require("../language/realm/contextRealm")
 const { checkClaimSafety } = require("../integration/safety/constraintGate");
 const { recordFeedback } = require("../learning/feedbackLoop");
 const math = require("../math/engine");
+const policyEngine = require("../policy/engine");
+const { ConditionOperator } = require("../shared/constants");
+
+// Synthetic, illustrative-only policy (Customer Intelligence Phase 7) —
+// mirrors the exact example from the spec this milestone implements.
+// Never asserted as any real business's actual policy.
+const syntheticRefundPolicy = Object.freeze({
+  id: "policy-refund-standard",
+  version: 1,
+  priority: 1,
+  conditions: [
+    { field: "purchase_age_days", operator: ConditionOperator.LTE, value: 30 },
+    { field: "payment_status", operator: ConditionOperator.EQ, value: "completed" },
+  ],
+  exceptions: [{ field: "product_category", operator: ConditionOperator.EQ, value: "final_sale" }],
+});
 
 function normalize(sequence) {
   return sequence.symbols.map((s) => s.normalized).join("");
@@ -277,6 +293,41 @@ const BENCHMARK_CASES = [
       const fabricated = { ...record, probability: 0.72 };
       const result = checkClaimSafety(fabricated);
       return { passed: result.safe === false && result.violations.some((v) => v.includes("fabrication")), detail: result };
+    },
+  },
+  {
+    id: "policy_eligible_when_all_facts_known",
+    category: "POLICY_REASONING",
+    description: "Synthetic refund policy (purchase_age<=30, payment completed, not final_sale): every fact known and satisfied -> ELIGIBLE.",
+    run: () => {
+      const result = policyEngine.evaluatePolicy(syntheticRefundPolicy, {
+        purchase_age_days: 10,
+        payment_status: "completed",
+        product_category: "electronics",
+      });
+      return { passed: result.status === "ELIGIBLE", detail: result };
+    },
+  },
+  {
+    id: "policy_unknown_never_guessed",
+    category: "POLICY_REASONING",
+    description: "The same refund policy with a required fact never supplied -> UNKNOWN, never fabricated as eligible or ineligible.",
+    run: () => {
+      const result = policyEngine.evaluatePolicy(syntheticRefundPolicy, { purchase_age_days: 10 });
+      return { passed: result.status === "UNKNOWN" && result.eligible === null, detail: result };
+    },
+  },
+  {
+    id: "policy_exception_overrides_conditions",
+    category: "POLICY_REASONING",
+    description: "The same refund policy with a final_sale exception triggered -> NOT_ELIGIBLE, overriding otherwise-satisfied conditions; never silently ignored.",
+    run: () => {
+      const result = policyEngine.evaluatePolicy(syntheticRefundPolicy, {
+        purchase_age_days: 10,
+        payment_status: "completed",
+        product_category: "final_sale",
+      });
+      return { passed: result.status === "NOT_ELIGIBLE" && !!result.exception_triggered, detail: result };
     },
   },
 ];

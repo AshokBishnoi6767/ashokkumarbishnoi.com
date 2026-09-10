@@ -166,6 +166,34 @@ const Polarity = Object.freeze({
   NEGATIVE: "NEGATIVE",
 });
 
+// Policy Engine's own outcome vocabulary (Customer Intelligence layer).
+// Deliberately separate from VerificationOutcome/TruthState/ResultStatus
+// above — an eligibility decision is neither a truth judgment nor an
+// action-execution outcome. UNKNOWN is the honest result whenever a
+// fact a condition depends on was never supplied — never guessed, never
+// defaulted to NOT_ELIGIBLE or ELIGIBLE.
+const EligibilityStatus = Object.freeze({
+  ELIGIBLE: "ELIGIBLE",
+  NOT_ELIGIBLE: "NOT_ELIGIBLE",
+  UNKNOWN: "UNKNOWN",
+  NOT_EFFECTIVE: "NOT_EFFECTIVE",
+});
+
+// The deliberately small, curated comparison vocabulary policy/rule
+// conditions are built from — see policy/engine.js. Not an attempt at a
+// general expression language; anything more expressive (arbitrary
+// boolean logic, computed fields) is out of scope for this phase.
+const ConditionOperator = Object.freeze({
+  EQ: "EQ",
+  NEQ: "NEQ",
+  LT: "LT",
+  LTE: "LTE",
+  GT: "GT",
+  GTE: "GTE",
+  IN: "IN",
+  NOT_IN: "NOT_IN",
+});
+
 const Modality = Object.freeze({
   TEXT: "TEXT",
   IMAGE: "IMAGE",
@@ -216,6 +244,8 @@ module.exports = {
   ProbabilityStatus,
   UncertaintyStatus,
   Polarity,
+  EligibilityStatus,
+  ConditionOperator,
   Modality,
   ProcessingStatus,
   MemoryClass,

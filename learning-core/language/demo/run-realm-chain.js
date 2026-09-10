@@ -36,6 +36,8 @@ const learningPipeline = require("../../learning/candidatePipeline");
 const feedbackLoop = require("../../learning/feedbackLoop");
 const { generateSurfaceText, generateMathExpression } = require("../realm/generationRealm");
 const { TaskType, routeTask } = require("../../model/taskRouter");
+const policyEngine = require("../../policy/engine");
+const { ConditionOperator } = require("../../shared/constants");
 
 function section(title) {
   console.log("\n=== " + title + " ===");
@@ -714,6 +716,43 @@ console.log("  ^ copula negation: 'not' is consumed inside the object chunk walk
   const negative = { ...negativeRaw, subject: positive.subject };
   const contradictions = checkConsistency([positive, negative]);
   console.log(`checkConsistency([positive, negative]) -> ${contradictions.length} contradiction(s): ${contradictions.map((c) => c.type).join(", ")}`);
+}
+
+section("64. Customer Intelligence: Policy Engine (Phase 7/8) — synthetic refund policy, never fabricated eligibility");
+{
+  // Synthetic, illustrative-only policy — not a real business's actual
+  // policy. Mirrors the exact example from the Customer Intelligence
+  // spec: purchase_age<=30, payment completed, not final_sale.
+  const refundPolicy = {
+    id: "policy-refund-standard",
+    version: 1,
+    priority: 1,
+    conditions: [
+      { field: "purchase_age_days", operator: ConditionOperator.LTE, value: 30 },
+      { field: "payment_status", operator: ConditionOperator.EQ, value: "completed" },
+    ],
+    exceptions: [{ field: "product_category", operator: ConditionOperator.EQ, value: "final_sale" }],
+  };
+
+  const eligible = policyEngine.evaluatePolicy(refundPolicy, {
+    purchase_age_days: 10,
+    payment_status: "completed",
+    product_category: "electronics",
+  });
+  console.log(`All facts known, satisfied -> ${eligible.status} (eligible=${eligible.eligible})`);
+
+  const unknown = policyEngine.evaluatePolicy(refundPolicy, { purchase_age_days: 10 });
+  console.log(`payment_status not supplied -> ${unknown.status} (never guessed as true or false)`);
+
+  const tooOld = policyEngine.evaluatePolicy(refundPolicy, { purchase_age_days: 90 });
+  console.log(`purchase_age_days=90 (>30), payment_status not even supplied -> ${tooOld.status} (conclusive despite the missing fact)`);
+
+  const finalSale = policyEngine.evaluatePolicy(refundPolicy, {
+    purchase_age_days: 10,
+    payment_status: "completed",
+    product_category: "final_sale",
+  });
+  console.log(`final_sale exception triggers -> ${finalSale.status} (overrides otherwise-satisfied conditions)`);
 }
 
 (async () => {

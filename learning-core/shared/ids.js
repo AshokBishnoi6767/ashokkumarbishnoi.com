@@ -24,4 +24,5 @@ module.exports = {
   newContradictionId: () => makeId("contra"),
   newHypothesisId: () => makeId("hyp"),
   newVerificationId: () => makeId("verif"),
+  newPolicyEvaluationId: () => makeId("policy-eval"),
 };

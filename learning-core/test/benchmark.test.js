@@ -41,6 +41,12 @@ test("Benchmark: mathematical accuracy cases all pass — real computation, not 
   assert.equal(result.by_category.MATHEMATICAL_ACCURACY.passed, result.by_category.MATHEMATICAL_ACCURACY.total);
 });
 
+test("Benchmark: POLICY_REASONING cases all pass — eligible, UNKNOWN, and exception-override are all real, distinct outcomes", () => {
+  const result = runBenchmark();
+  assert.equal(result.by_category.POLICY_REASONING.passed, result.by_category.POLICY_REASONING.total);
+  assert.equal(result.by_category.POLICY_REASONING.total, 3);
+});
+
 test("Benchmark: the deduction MECHANISM passes even though NL parsing of the classic syllogism does not — these are different capabilities", () => {
   const result = runBenchmark();
   const byId = Object.fromEntries(result.results.map((r) => [r.id, r]));
