@@ -5,7 +5,7 @@
  *
  *   SYMBOL -> LEXICAL -> TOKEN -> MORPHOLOGY -> POS -> SYNTAX -> ENTITY
  *   -> RELATIONSHIP -> SEMANTIC REPRESENTATION -> KNOWLEDGE REPRESENTATION
- *   -> KNOWLEDGE QUERY
+ *   -> KNOWLEDGE QUERY -> CONTEXT REPRESENTATION
  *
  * Run with: node learning-core/language/demo/run-realm-chain.js
  *
@@ -24,6 +24,7 @@ const { extractRelationships } = require("../realm/relationshipRealm");
 const { extractPropositions } = require("../realm/semanticRealm");
 const { extractKnowledge } = require("../realm/knowledgeRealm");
 const { queryKnowledge, indexKnowledgeBySubject } = require("../realm/knowledgeQueryRealm");
+const { buildContextFrame, detectUnresolvedReferences } = require("../realm/contextRealm");
 
 function section(title) {
   console.log("\n=== " + title + " ===");
@@ -392,4 +393,47 @@ section("37. Knowledge Query Realm: indexing groups without merging");
   for (const [subjectId, recs] of index.entries()) {
     console.log(`subject ${subjectId} -> ${recs.length} record(s):`, recs.map((r) => r.predicate));
   }
+}
+
+section("38. Context Realm: known vs. unknown is explicit — nothing is guessed for an unsupplied field");
+{
+  const empty = buildContextFrame();
+  console.log("buildContextFrame() with nothing supplied ->");
+  console.log("  known_state:", empty.known_state);
+  console.log("  unknown_state:", empty.unknown_state);
+}
+
+section("39. Context Realm: assembling a real snapshot from entities/propositions/knowledge already produced downstream");
+{
+  const text = "John works at Google in Toronto.";
+  const { tokens } = tokenize(text);
+  const entities = extractEntityMentions(text, tokens);
+  const records = extractKnowledge(text, tokens).records;
+
+  const frame = buildContextFrame({
+    sessionId: "sess-demo-1",
+    currentInput: { text },
+    speaker: { id: "user-1", name: "Ashok" },
+    activeEntities: entities,
+    activePropositions: records,
+    activeKnowledge: records,
+    tokens,
+  });
+
+  console.log(`"${text}" ->`);
+  console.log(`  known_state: [${frame.known_state.join(", ")}]`);
+  console.log(`  active_entities: ${frame.active_entities.length}, active_propositions/knowledge: ${frame.active_propositions.length}`);
+  console.log(
+    `  each active_propositions[i].truth_state is still "${frame.active_propositions[0].truth_state}"` +
+      ` — the Context Realm added no epistemic fields of its own`
+  );
+}
+
+section("40. Context Realm: an unresolved reference is flagged, never silently resolved");
+{
+  const text = "John called him.";
+  const { tokens } = tokenize(text);
+  const refs = detectUnresolvedReferences(tokens);
+  console.log(`"${text}" -> unresolved_references:`, refs.map((r) => `"${r.surface}" (${r.status}, candidates: ${r.candidate_tags.join("/")})`));
+  console.log(`  No "referent" field exists on any entry — resolving identity is explicitly out of scope here.`);
 }
