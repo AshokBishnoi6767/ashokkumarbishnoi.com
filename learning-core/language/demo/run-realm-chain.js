@@ -25,6 +25,7 @@ const { extractPropositions } = require("../realm/semanticRealm");
 const { extractKnowledge } = require("../realm/knowledgeRealm");
 const { queryKnowledge, indexKnowledgeBySubject } = require("../realm/knowledgeQueryRealm");
 const { buildContextFrame, detectUnresolvedReferences } = require("../realm/contextRealm");
+const { applyRule, applyRulesUntilFixedPoint, checkConsistency } = require("../realm/reasoningRealm");
 
 function section(title) {
   console.log("\n=== " + title + " ===");
@@ -436,4 +437,35 @@ section("40. Context Realm: an unresolved reference is flagged, never silently r
   const refs = detectUnresolvedReferences(tokens);
   console.log(`"${text}" -> unresolved_references:`, refs.map((r) => `"${r.surface}" (${r.status}, candidates: ${r.candidate_tags.join("/")})`));
   console.log(`  No "referent" field exists on any entry — resolving identity is explicitly out of scope here.`);
+}
+
+section("41. Reasoning Realm: deduction — 'All birds fly. Penguins are birds.' derives 'Penguins can fly.', marked DERIVED not KNOWN");
+{
+  const penguin = { id: "entity-penguins", surface: "Penguins", type: "UNKNOWN" };
+  const premise = { id: "know-penguin-bird", subject: penguin, predicate: "IS_A", object: { surface: "bird" }, truth_state: "UNKNOWN" };
+  const rule = { id: "rule-birds-fly", if: { predicate: "IS_A", objectSurface: "bird" }, then: { predicate: "CAN", objectSurface: "fly" } };
+  const [derived] = applyRule(rule, [premise]);
+  console.log(`Premise: Penguins IS_A bird. Rule: IS_A bird -> CAN fly (caller-supplied, not built in).`);
+  console.log(`Derived: ${derived.subject.surface} ${derived.predicate} ${derived.object.surface} | truth_state=${derived.truth_state} | derived_from=${JSON.stringify(derived.derived_from)}`);
+}
+
+section("42. Reasoning Realm: multi-hop derivation chain, each hop's provenance traceable back to its own rule");
+{
+  const penguin = { id: "entity-penguins", surface: "Penguins", type: "UNKNOWN" };
+  const premise = { id: "know-penguin-bird", subject: penguin, predicate: "IS_A", object: { surface: "bird" }, truth_state: "UNKNOWN" };
+  const flyRule = { id: "rule-1", if: { predicate: "IS_A", objectSurface: "bird" }, then: { predicate: "CAN", objectSurface: "fly" } };
+  const airborneRule = { id: "rule-2", if: { predicate: "CAN", objectSurface: "fly" }, then: { predicate: "IS", objectSurface: "airborne-capable" } };
+  const chain = applyRulesUntilFixedPoint([flyRule, airborneRule], [premise]);
+  chain.forEach((d) => console.log(`  hop: ${d.subject.surface} ${d.predicate} ${d.object.surface} (rule ${d.derived_from[1]})`));
+}
+
+section("43. Reasoning Realm: contradiction detection — 'John is in Toronto.' / 'John is not in Toronto.' coexist, neither deleted");
+{
+  const john = { id: "entity-john", surface: "John", type: "PERSON" };
+  const toronto = { id: "entity-toronto", surface: "Toronto", type: "LOCATION" };
+  const positive = { id: "know-a", subject: john, predicate: "LOCATED_IN", object: toronto, polarity: "POSITIVE", truth_state: "UNKNOWN" };
+  const negative = { id: "know-b", subject: john, predicate: "LOCATED_IN", object: toronto, polarity: "NEGATIVE", truth_state: "UNKNOWN" };
+  const contradictions = checkConsistency([positive, negative]);
+  console.log(`checkConsistency([positive, negative]) ->`, contradictions.map((c) => `${c.type}: ${c.status} over [${c.conflicting_records.join(", ")}]`));
+  console.log(`  Both records still exist afterward, truth_state unchanged: ${positive.truth_state}, ${negative.truth_state} — resolution deferred to Verification.`);
 }

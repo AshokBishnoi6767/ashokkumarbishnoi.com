@@ -102,6 +102,34 @@ const TruthState = Object.freeze({
   POSSIBLE: "POSSIBLE",
   VERIFIED: "VERIFIED",
   FAILED: "FAILED",
+  // Added for the Reasoning Realm: a record produced by rule application
+  // over other records, never by direct extraction. Distinct from every
+  // value above — DERIVED is never auto-promoted to KNOWN or VERIFIED
+  // merely because a rule fired; that promotion is the Verification
+  // Realm's job, working from independent evidence.
+  DERIVED: "DERIVED",
+});
+
+// Verification Realm's own outcome vocabulary — deliberately separate
+// from TruthState (representation) and from ResultStatus (action
+// execution outcomes above). A claim can be UNKNOWN in TruthState and
+// still receive any of these VerificationOutcome values once checked.
+const VerificationOutcome = Object.freeze({
+  VERIFIED: "VERIFIED",
+  PARTIALLY_VERIFIED: "PARTIALLY_VERIFIED",
+  CONTRADICTED: "CONTRADICTED",
+  UNKNOWN: "UNKNOWN",
+  NOT_VERIFIABLE: "NOT_VERIFIABLE",
+});
+
+// Hypothesis Realm's own status vocabulary. A hypothesis is never
+// deleted or overwritten when evidence shifts — its status changes,
+// and prior states remain reconstructable from provenance.
+const HypothesisStatus = Object.freeze({
+  PROPOSED: "PROPOSED",
+  SUPPORTED: "SUPPORTED",
+  CONTRADICTED: "CONTRADICTED",
+  WITHDRAWN: "WITHDRAWN",
 });
 
 // Probability is a distinct mathematical concept from confidence — see
@@ -169,6 +197,8 @@ module.exports = {
   ResultStatus,
   EventStatus,
   TruthState,
+  VerificationOutcome,
+  HypothesisStatus,
   ProbabilityStatus,
   UncertaintyStatus,
   Modality,

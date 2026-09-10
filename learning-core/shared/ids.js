@@ -20,4 +20,8 @@ module.exports = {
   newRelationshipId: () => makeId("rel"),
   newPropositionId: () => makeId("prop"),
   newKnowledgeId: () => makeId("know"),
+  newReasoningId: () => makeId("reason"),
+  newContradictionId: () => makeId("contra"),
+  newHypothesisId: () => makeId("hyp"),
+  newVerificationId: () => makeId("verif"),
 };
