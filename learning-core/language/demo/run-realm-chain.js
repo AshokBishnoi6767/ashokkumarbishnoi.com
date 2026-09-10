@@ -3,7 +3,7 @@
 /**
  * Deterministic demonstration of the realm chain built so far:
  *
- *   SYMBOL -> LEXICAL -> TOKEN -> MORPHOLOGY
+ *   SYMBOL -> LEXICAL -> TOKEN -> MORPHOLOGY -> POS
  *
  * Run with: node learning-core/language/demo/run-realm-chain.js
  *
@@ -15,6 +15,7 @@
 const { createSequence } = require("../realm/symbolRealm");
 const { tokenize, TokenType } = require("../realm/tokenRealm");
 const { analyzeToken } = require("../realm/morphologyRealm");
+const { classifyToken, tagSentence } = require("../realm/posRealm");
 
 function section(title) {
   console.log("\n=== " + title + " ===");
@@ -61,3 +62,37 @@ for (const token of sentence.tokens) {
     morph.candidates.map((c) => c.feature)
   );
 }
+
+section("6. POS Realm: standalone words that genuinely have multiple grammatical roles");
+for (const word of ["that", "to", "before", "can", "should", "faster", "running"]) {
+  const token = { text: word, normalized: word, type: TokenType.WORD };
+  const result = classifyToken(token);
+  console.log(`${word} ->`, result.candidates.map((c) => `${c.tag}[${c.source}]`));
+}
+
+section("7. POS Realm: context narrows word-level ambiguity using hard grammatical constraints, not statistics");
+const should = classifyToken({ text: "should", normalized: "should", type: TokenType.WORD });
+const run = classifyToken({ text: "run", normalized: "run", type: TokenType.WORD }, { previous: should });
+console.log("'should' ->", should.candidates.map((c) => c.tag), "(unambiguous AUX)");
+console.log("'run' after 'should' ->", run.candidates.map((c) => `${c.tag} (${c.rule})`));
+
+const can = classifyToken({ text: "can", normalized: "can", type: TokenType.WORD });
+const fish = classifyToken({ text: "fish", normalized: "fish", type: TokenType.WORD }, { previous: can });
+console.log("'can' ->", can.candidates.map((c) => c.tag), "(AMBIGUOUS: AUX or NOUN)");
+console.log(
+  "'fish' after 'can' -> candidates=",
+  fish.candidates,
+  "(no context rule fires because 'can' itself is ambiguous — 'can fish' genuinely has two readings)"
+);
+
+section("8. Full chain on one sentence: TOKEN -> MORPHOLOGY -> POS, with context narrowing where it legitimately applies");
+const posResults = tagSentence(sentence.tokens);
+sentence.tokens.forEach((token, i) => {
+  const result = posResults[i];
+  console.log(`"${token.text}" -> POS=`, result.candidates.map((c) => c.tag), result.reason ? `(${result.reason})` : "");
+});
+console.log(
+  "\nNote: 'cat' comes back with no POS candidate. It follows 'fastest' (ADJ), not a determiner directly, so\n" +
+    "the single-previous-token context rule correctly does not reach back through the adjective to find 'the'.\n" +
+    "That is an honest UNKNOWN, not a wrong guess — resolving it needs NP-chunking, which is Syntax-realm work."
+);
