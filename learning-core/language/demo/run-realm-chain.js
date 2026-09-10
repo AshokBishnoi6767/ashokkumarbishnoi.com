@@ -33,6 +33,7 @@ const { assignProbability, resolveUncertainty, representDistribution } = require
 const { storeKnowledgeAsMemory, storeVerificationAsMemory } = require("../../memory/realmBridge");
 const memoryStore = require("../../memory/store");
 const learningPipeline = require("../../learning/candidatePipeline");
+const feedbackLoop = require("../../learning/feedbackLoop");
 
 function section(title) {
   console.log("\n=== " + title + " ===");
@@ -634,4 +635,22 @@ section("57. Learning Engine: a candidate rule cannot reach PROMOTED without pas
   const { candidate: promoted, memoryRecord } = learningPipeline.promoteCandidate(candidate);
   console.log(`promoteCandidate -> ${promoted.status}, written to Memory Engine as memory_id=${memoryRecord.memory_id} (class LEARNED_PATTERN)`);
   console.log(`Full history: ${promoted.history.map((h) => h.status).join(" -> ")}`);
+}
+
+section("58. Feedback Engine: INPUT -> ESTIMATE -> OUTPUT -> FEEDBACK -> UPDATED STATE -> NEXT INPUT");
+{
+  let state = feedbackLoop.initialState();
+  const cycle1 = feedbackLoop.recordFeedback({ input: "2+2", estimate: 4, output: math.add(2, 2).output, matched: true, currentState: state });
+  state = cycle1.updated_state;
+  console.log(`Cycle 1: estimate=4, output=${cycle1.output} -> ${cycle1.feedback}. State: confirmed=${state.confirmed_count}, mismatch=${state.mismatch_count}`);
+
+  const cycle2 = feedbackLoop.recordFeedback({ input: "12*17", estimate: 200, output: math.multiply(12, 17).output, matched: false, currentState: state });
+  state = cycle2.updated_state;
+  console.log(`Cycle 2: estimate=200, output=${cycle2.output} -> ${cycle2.feedback}. State: confirmed=${state.confirmed_count}, mismatch=${state.mismatch_count}`);
+
+  const candidate = feedbackLoop.feedbackToLearningCandidate(cycle2);
+  console.log(`MISMATCH -> Learning Engine candidate event created (trigger: ${candidate.trigger}, promoted_to_persistent: ${candidate.promoted_to_persistent})`);
+
+  const confirmedCandidate = feedbackLoop.feedbackToLearningCandidate(cycle1);
+  console.log(`CONFIRMED -> no learning candidate needed: ${confirmedCandidate}`);
 }
