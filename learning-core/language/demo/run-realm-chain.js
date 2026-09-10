@@ -26,6 +26,7 @@ const { extractKnowledge } = require("../realm/knowledgeRealm");
 const { queryKnowledge, indexKnowledgeBySubject } = require("../realm/knowledgeQueryRealm");
 const { buildContextFrame, detectUnresolvedReferences } = require("../realm/contextRealm");
 const { applyRule, applyRulesUntilFixedPoint, checkConsistency } = require("../realm/reasoningRealm");
+const { proposeHypothesis, addEvidence, groupHypothesesByProposition } = require("../realm/hypothesisRealm");
 
 function section(title) {
   console.log("\n=== " + title + " ===");
@@ -468,4 +469,27 @@ section("43. Reasoning Realm: contradiction detection — 'John is in Toronto.' 
   const contradictions = checkConsistency([positive, negative]);
   console.log(`checkConsistency([positive, negative]) ->`, contradictions.map((c) => `${c.type}: ${c.status} over [${c.conflicting_records.join(", ")}]`));
   console.log(`  Both records still exist afterward, truth_state unchanged: ${positive.truth_state}, ${negative.truth_state} — resolution deferred to Verification.`);
+}
+
+section('44. Hypothesis Realm: "I saw the man with the telescope." — two competing readings coexist, neither forced to win');
+{
+  const text = "I saw the man with the telescope.";
+  const { tokens } = tokenize(text);
+  const [proposition] = extractPropositions(text, tokens).propositions;
+
+  let hUsedTelescope = proposeHypothesis({
+    proposition: proposition || { id: "prop-telescope-demo" },
+    supportingEvidence: ["PP-attachment reading A: 'with the telescope' modifies the verb 'saw'"],
+  });
+  let hManHadTelescope = proposeHypothesis({
+    proposition: proposition || { id: "prop-telescope-demo" },
+    supportingEvidence: ["PP-attachment reading B: 'with the telescope' modifies 'the man'"],
+  });
+
+  console.log(`Hypothesis A: ${hUsedTelescope.status} (${hUsedTelescope.supporting_evidence.length} supporting)`);
+  console.log(`Hypothesis B: ${hManHadTelescope.status} (${hManHadTelescope.supporting_evidence.length} supporting)`);
+  console.log("Neither is deleted or auto-selected — both remain addressable, distinct hypotheses.");
+
+  hManHadTelescope = addEvidence(hManHadTelescope, { contradicting: ["no telescope was mentioned as the man's possession elsewhere in context"] });
+  console.log(`Hypothesis B after contradicting evidence -> status: ${hManHadTelescope.status} (still not deleted, not silently resolved)`);
 }

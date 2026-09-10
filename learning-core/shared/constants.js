@@ -129,6 +129,10 @@ const HypothesisStatus = Object.freeze({
   PROPOSED: "PROPOSED",
   SUPPORTED: "SUPPORTED",
   CONTRADICTED: "CONTRADICTED",
+  // Both supporting AND contradicting evidence exist — deliberately
+  // distinct from CONTRADICTED (contradicting evidence only). The
+  // Hypothesis Realm never collapses this ambiguity into a forced pick.
+  DISPUTED: "DISPUTED",
   WITHDRAWN: "WITHDRAWN",
 });
 
