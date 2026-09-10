@@ -47,6 +47,19 @@
  *  all ran checks VERIFIED (>=1 ran)             -> VERIFIED
  *  a mix of VERIFIED and UNKNOWN (no CONTRADICTED) -> PARTIALLY_VERIFIED
  *  all ran checks UNKNOWN                        -> UNKNOWN
+ *
+ * === verifyMathClaim: a first-class math backend, added once one existed ===
+ * When this realm was first built, math/engine.js did not exist yet, so a
+ * math claim's independentCheck had to be a hand-written recompute
+ * function (e.g. `() => 2 + 2 === 4`). Now that math/engine.js does
+ * exist, verifyMathClaim() is a pure additive convenience: it takes a
+ * REAL result object math/engine.js already produced and folds it into
+ * an independentCheck automatically, via the exact same verifyClaim()
+ * decision table above — no new outcome logic, no change to verifyClaim
+ * itself. It still never trusts a hand-built look-alike object: the
+ * same provenance.realm === "MATHEMATICAL_ENGINE" check
+ * probabilityRealm.js's assignProbability() already established is
+ * reused here.
  */
 
 const { newVerificationId } = require("../../shared/ids");
@@ -146,4 +159,28 @@ function checkProvenance(claim) {
   return { claim_id: claim.id, complete: missing.length === 0, missing };
 }
 
-module.exports = { verifyClaim, checkProvenance };
+function isRealMathResult(mathResult) {
+  return !!(mathResult && typeof mathResult.operator === "string" && mathResult.provenance && mathResult.provenance.realm === "MATHEMATICAL_ENGINE");
+}
+
+// Convenience wrapper: verifies a claim using a REAL math/engine.js
+// result as the sole independent check. `mathResult.valid` decides the
+// outcome the same way a hand-written `() => 2 + 2 === 4` would have —
+// this changes nothing about verifyClaim()'s own decision table, it
+// only saves the caller from writing that closure by hand for a math
+// claim. Additional independentChecks/allRecords/constraints may still
+// be supplied and are combined exactly as verifyClaim() already does.
+function verifyMathClaim(claim, mathResult, { checkName = "math_engine_recomputation", independentChecks = [], allRecords = [], constraints = [] } = {}) {
+  if (!isRealMathResult(mathResult)) {
+    throw new TypeError(
+      "verifyMathClaim requires a real result object from math/engine.js (checked via provenance.realm === \"MATHEMATICAL_ENGINE\") — a hand-built look-alike is rejected, same discipline as probabilityRealm.js#assignProbability."
+    );
+  }
+  return verifyClaim(claim, {
+    independentChecks: [{ name: checkName, check: () => mathResult.valid === true }, ...independentChecks],
+    allRecords,
+    constraints,
+  });
+}
+
+module.exports = { verifyClaim, checkProvenance, verifyMathClaim };

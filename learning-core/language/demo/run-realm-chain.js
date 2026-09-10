@@ -27,7 +27,7 @@ const { queryKnowledge, indexKnowledgeBySubject } = require("../realm/knowledgeQ
 const { buildContextFrame, detectUnresolvedReferences } = require("../realm/contextRealm");
 const { applyRule, applyRulesUntilFixedPoint, checkConsistency } = require("../realm/reasoningRealm");
 const { proposeHypothesis, addEvidence, groupHypothesesByProposition } = require("../realm/hypothesisRealm");
-const { verifyClaim, checkProvenance } = require("../realm/verificationRealm");
+const { verifyClaim, checkProvenance, verifyMathClaim } = require("../realm/verificationRealm");
 const math = require("../../math/engine");
 const { assignProbability, resolveUncertainty, representDistribution } = require("../realm/probabilityRealm");
 const { storeKnowledgeAsMemory, storeVerificationAsMemory } = require("../../memory/realmBridge");
@@ -510,6 +510,11 @@ section("45. Verification Realm: '2 + 2' — verified by actual recomputation, n
   const verifiedBad = verifyClaim(claim, { independentChecks: [{ name: "arithmetic", check: () => 2 + 2 === 5 }] });
   console.log(`"2 + 2 = 4" -> ${verifiedGood.outcome}`);
   console.log(`"2 + 2 = 5" -> ${verifiedBad.outcome}`);
+
+  // Phase 1 addition: verifyMathClaim() automates this using a REAL
+  // math/engine.js result directly, instead of a hand-written closure.
+  const viaMathEngine = verifyMathClaim(claim, math.add(2, 2));
+  console.log(`verifyMathClaim(claim, math.add(2, 2)) -> ${viaMathEngine.outcome} (no hand-written recompute function needed)`);
 }
 
 section("46. Verification Realm: an unchecked claim is UNKNOWN, not silently trusted");

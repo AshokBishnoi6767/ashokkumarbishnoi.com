@@ -3,8 +3,9 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 
-const { verifyClaim, checkProvenance } = require("../language/realm/verificationRealm");
+const { verifyClaim, checkProvenance, verifyMathClaim } = require("../language/realm/verificationRealm");
 const { VerificationOutcome } = require("../shared/constants");
+const math = require("../math/engine");
 
 const mathClaim = { id: "claim-1" };
 
@@ -115,4 +116,36 @@ test("Verification realm: checkProvenance does not decide truth — complete pro
   assert.equal(provenanceResult.complete, true);
   const verificationResult = verifyClaim(good);
   assert.equal(verificationResult.outcome, VerificationOutcome.UNKNOWN);
+});
+
+test("Verification realm: verifyMathClaim verifies a real math/engine.js result — '2 + 2 = 4'", () => {
+  const result = verifyMathClaim(mathClaim, math.add(2, 2));
+  assert.equal(result.outcome, VerificationOutcome.VERIFIED);
+  assert.equal(result.check_results[0].name, "math_engine_recomputation");
+});
+
+test("Verification realm: verifyMathClaim reports CONTRADICTED for an invalid math result (e.g. divide by zero)", () => {
+  const result = verifyMathClaim(mathClaim, math.divide(5, 0));
+  assert.equal(result.outcome, VerificationOutcome.CONTRADICTED);
+});
+
+test("Verification realm: verifyMathClaim rejects a hand-built look-alike object, same discipline as assignProbability", () => {
+  const fake = { operator: "ADD", output: 4, valid: true, provenance: { realm: "SOMEWHERE_ELSE" } };
+  assert.throws(() => verifyMathClaim(mathClaim, fake), TypeError);
+});
+
+test("Verification realm: verifyMathClaim rejects a bare number", () => {
+  assert.throws(() => verifyMathClaim(mathClaim, 4), TypeError);
+});
+
+test("Verification realm: verifyMathClaim combines with additional independentChecks via the same decision table", () => {
+  const result = verifyMathClaim(mathClaim, math.add(2, 2), {
+    independentChecks: [{ name: "unrelated-inconclusive", check: () => { throw new Error("no source"); } }],
+  });
+  assert.equal(result.outcome, VerificationOutcome.PARTIALLY_VERIFIED);
+});
+
+test("Verification realm: verifyMathClaim changes nothing about verifyClaim's own behavior for non-math calls", () => {
+  const result = verifyClaim(mathClaim, { independentChecks: [{ name: "manual", check: () => true }] });
+  assert.equal(result.outcome, VerificationOutcome.VERIFIED);
 });
