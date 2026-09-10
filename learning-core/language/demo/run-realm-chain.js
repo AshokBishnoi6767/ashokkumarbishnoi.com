@@ -29,6 +29,7 @@ const { applyRule, applyRulesUntilFixedPoint, checkConsistency } = require("../r
 const { proposeHypothesis, addEvidence, groupHypothesesByProposition } = require("../realm/hypothesisRealm");
 const { verifyClaim, checkProvenance } = require("../realm/verificationRealm");
 const math = require("../../math/engine");
+const { assignProbability, resolveUncertainty, representDistribution } = require("../realm/probabilityRealm");
 
 function section(title) {
   console.log("\n=== " + title + " ===");
@@ -560,4 +561,38 @@ section("52. Mathematical Engine: gradient descent as an explicit operator — t
 {
   const r = math.runGradientDescent({ theta0: 0, gradientFn: (x) => 2 * (x - 3), learningRate: 0.1 });
   console.log(`Minimizing (x-3)^2 from theta0=0 -> converged=${r.output.converged} in ${r.output.iterations} iterations, theta≈${r.output.theta.toFixed(6)}`);
+}
+
+section("53. Probability/Uncertainty Realm: a KnowledgeRecord's probability only ever moves off NOT_DEFINED via a real computation");
+{
+  const text = "John works at Google.";
+  const { tokens } = tokenize(text);
+  const [record] = extractKnowledge(text, tokens).records;
+  console.log(`Before: probability=${record.probability}, uncertainty=${record.uncertainty}`);
+
+  const bayes = math.bayesRule({ pBGivenA: 0.9, pA: 0.2, pB: 0.3 });
+  const withProbability = assignProbability(record, bayes);
+  console.log(`After assignProbability(record, math.bayesRule(...)): probability=${withProbability.probability} (method: ${withProbability.probability_provenance.method})`);
+
+  try {
+    assignProbability(record, 0.72);
+  } catch (err) {
+    console.log(`assignProbability(record, 0.72) [a bare number] -> rejected: "${err.message}"`);
+  }
+}
+
+section("54. Probability/Uncertainty Realm: uncertainty is cleared only by an actual VERIFIED outcome, never by confidence or probability");
+{
+  const record = { id: "know-x", uncertainty: "PRESENT" };
+  const verified = verifyClaim({ id: "know-x" }, { independentChecks: [{ name: "check", check: () => true }] });
+  const contradicted = verifyClaim({ id: "know-y" }, { independentChecks: [{ name: "check", check: () => false }] });
+  console.log(`resolveUncertainty after VERIFIED -> ${resolveUncertainty(record, verified).uncertainty}`);
+  console.log(`resolveUncertainty after CONTRADICTED -> ${resolveUncertainty(record, contradicted).uncertainty} (still PRESENT — contradicted is not the same as "no longer uncertain")`);
+}
+
+section("55. Probability/Uncertainty Realm: a distribution is validated, never auto-normalized");
+{
+  console.log("Fair coin {heads:0.5, tails:0.5} ->", representDistribution([{ label: "heads", probability: 0.5 }, { label: "tails", probability: 0.5 }]).valid);
+  const bad = representDistribution([{ label: "a", probability: 0.3 }, { label: "b", probability: 0.3 }]);
+  console.log(`{a:0.3, b:0.3} (sums to 0.6) -> valid=${bad.valid}, error="${bad.error}"`);
 }
