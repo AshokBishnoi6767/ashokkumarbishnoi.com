@@ -34,6 +34,7 @@ const { storeKnowledgeAsMemory, storeVerificationAsMemory } = require("../../mem
 const memoryStore = require("../../memory/store");
 const learningPipeline = require("../../learning/candidatePipeline");
 const feedbackLoop = require("../../learning/feedbackLoop");
+const { generateSurfaceText, generateMathExpression } = require("../realm/generationRealm");
 
 function section(title) {
   console.log("\n=== " + title + " ===");
@@ -653,4 +654,25 @@ section("58. Feedback Engine: INPUT -> ESTIMATE -> OUTPUT -> FEEDBACK -> UPDATED
 
   const confirmedCandidate = feedbackLoop.feedbackToLearningCandidate(cycle1);
   console.log(`CONFIRMED -> no learning candidate needed: ${confirmedCandidate}`);
+}
+
+section("59. Generation Realm: round-tripping structured records back to surface text — never adding an unsupported fact");
+{
+  const text = "Dog bites man.";
+  const { tokens } = tokenize(text);
+  const [record] = extractKnowledge(text, tokens).records;
+  const generated = generateSurfaceText(record);
+  console.log(`Input: "${text}" -> KnowledgeRecord -> generated: "${generated.text}" (lexical_selection: ${generated.lexical_selection})`);
+
+  const penguin = { id: "entity-penguin", surface: "Penguins" };
+  const premise = { id: "know-1", subject: penguin, predicate: "IS_A", object: { surface: "bird" }, truth_state: "UNKNOWN" };
+  const rule = { id: "rule-1", if: { predicate: "IS_A", objectSurface: "bird" }, then: { predicate: "CAN", objectSurface: "fly" } };
+  const [derived] = applyRule(rule, [premise]);
+  console.log(`A DERIVED record generates with a visible marker: "${generateSurfaceText(derived).text}"`);
+}
+
+section("60. Generation Realm: a second output kind (mathematical expressions), still downstream of structured data, not an LLM");
+{
+  console.log(generateMathExpression(math.add(2, 2)).text);
+  console.log(generateMathExpression(math.divide(5, 0)).text);
 }
