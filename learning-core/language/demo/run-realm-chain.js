@@ -4,7 +4,7 @@
  * Deterministic demonstration of the realm chain built so far:
  *
  *   SYMBOL -> LEXICAL -> TOKEN -> MORPHOLOGY -> POS -> SYNTAX -> ENTITY
- *   -> RELATIONSHIP -> SEMANTIC REPRESENTATION
+ *   -> RELATIONSHIP -> SEMANTIC REPRESENTATION -> KNOWLEDGE REPRESENTATION
  *
  * Run with: node learning-core/language/demo/run-realm-chain.js
  *
@@ -21,6 +21,7 @@ const { findNounPhrases, parseSentence } = require("../realm/syntaxRealm");
 const { extractEntityMentions, groupMentionsByCandidateIdentity } = require("../realm/entityRealm");
 const { extractRelationships } = require("../realm/relationshipRealm");
 const { extractPropositions } = require("../realm/semanticRealm");
+const { extractKnowledge } = require("../realm/knowledgeRealm");
 
 function section(title) {
   console.log("\n=== " + title + " ===");
@@ -274,3 +275,54 @@ showPropositions("John chased John.");
 section("28. Semantic Realm: temporal information already resolved below is carried forward, never reinterpreted");
 showPropositions("John works at Google today.", { now: new Date("2026-09-10T12:00:00Z"), timezone: "UTC" });
 console.log("Known limitation: negation is not representable at this boundary — see semanticRealm.js module doc.");
+
+function showKnowledge(text, opts) {
+  const { tokens } = tokenize(text);
+  const result = extractKnowledge(text, tokens, opts);
+  console.log(`"${text}"`);
+  if (result.records.length === 0) {
+    console.log(`  (no knowledge record) reason: ${result.reason}${result.ambiguous ? " [ambiguous]" : ""}`);
+  }
+  for (const record of result.records) {
+    console.log(
+      `  ${record.subject.surface} --${record.predicate}--> ${record.object.surface}` +
+        `  | truth_state=${record.truth_state} confidence=${record.confidence} probability=${record.probability} uncertainty=${record.uncertainty}` +
+        `  | proposition_id=${record.proposition_id} evidence.relationship_id=${record.evidence.relationship_id}` +
+        `  | provenance.realm=${record.provenance.realm} provenance.proposition_source=${record.provenance.proposition_source}`
+    );
+  }
+}
+
+section("29. Knowledge Realm: a Proposition becomes an explicit, individually-addressable Knowledge Record — KNOWLEDGE != TRUTH");
+showKnowledge("Dog bites man.");
+showKnowledge("Man bites dog.");
+console.log("Same predicate, swapped roles — genuinely different knowledge records, exactly as at every layer below.");
+
+section("30. Knowledge Realm: direction still matters through the full chain");
+showKnowledge("John works at Google.");
+showKnowledge("Google works with John.");
+
+section("31. Knowledge Realm: one clause, two knowledge records — never collapsed");
+showKnowledge("John works at Google in Toronto.");
+
+section("32. Knowledge Realm: contradictory or duplicate propositions coexist as separate records — no merging, no resolution");
+{
+  const { buildKnowledgeRecords } = require("../realm/knowledgeRealm");
+  const { extractPropositions: extractProps } = require("../realm/semanticRealm");
+  function propsFor(text) {
+    const { tokens } = tokenize(text);
+    return extractProps(text, tokens).propositions;
+  }
+  const dup1 = propsFor("Dog bites man.")[0];
+  const dup2 = propsFor("Dog bites man.")[0];
+  const [recA, recB] = buildKnowledgeRecords([dup1, dup2]);
+  console.log(
+    `Two extractions of "Dog bites man." -> two distinct KnowledgeRecord ids: ${recA.id} !== ${recB.id}` +
+      ` (same predicate/subject/object, never silently merged into one)`
+  );
+}
+
+section("33. Knowledge Realm: never manufactured — honest upstream failures propagate to zero knowledge records");
+showKnowledge("John and Google.");
+showKnowledge("The fastest cat runs.");
+showKnowledge("The big red ball.");
