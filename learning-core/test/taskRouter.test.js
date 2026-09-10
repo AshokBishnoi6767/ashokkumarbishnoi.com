@@ -64,6 +64,31 @@ test("Model router: SURFACE_TEXT_GENERATION routes to the Language Generation Re
   assert.equal(result.text, "Dog bites man.");
 });
 
+test("Model router: HYPOTHESIS_PROPOSAL routes to the Hypothesis Realm", async () => {
+  const { backend, result } = await routeTask({ taskType: TaskType.HYPOTHESIS_PROPOSAL, args: { proposition: { id: "prop-1" }, supportingEvidence: ["e1"] } });
+  assert.equal(backend, "HYPOTHESIS_REALM");
+  assert.equal(result.status, "SUPPORTED");
+  assert.equal(result.proposition.id, "prop-1");
+});
+
+test("Model router: HYPOTHESIS_PROPOSAL rejects a call with no proposition, same as calling hypothesisRealm directly", async () => {
+  await assert.rejects(() => routeTask({ taskType: TaskType.HYPOTHESIS_PROPOSAL, args: {} }), TypeError);
+});
+
+test("Model router: CLAIM_VERIFICATION routes to the Verification Realm", async () => {
+  const { backend, result } = await routeTask({
+    taskType: TaskType.CLAIM_VERIFICATION,
+    args: { claim: { id: "claim-1" }, options: { independentChecks: [{ name: "check", check: () => true }] } },
+  });
+  assert.equal(backend, "VERIFICATION_REALM");
+  assert.equal(result.outcome, "VERIFIED");
+});
+
+test("Model router: CLAIM_VERIFICATION with no independentChecks is honestly UNKNOWN, never guessed", async () => {
+  const { result } = await routeTask({ taskType: TaskType.CLAIM_VERIFICATION, args: { claim: { id: "claim-2" } } });
+  assert.equal(result.outcome, "UNKNOWN");
+});
+
 test("Model router: OPEN_ENDED_GENERATION routes to model/registry.js's LLM provider path, honestly UNKNOWN with no credentials connected", async () => {
   const { backend, result } = await routeTask({ taskType: TaskType.OPEN_ENDED_GENERATION, args: { request: { prompt: "hello" } } });
   assert.equal(backend, "LLM_PROVIDER");

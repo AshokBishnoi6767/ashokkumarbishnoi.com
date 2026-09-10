@@ -693,6 +693,12 @@ section("61. Model Router: task type decides the backend — deterministic engin
   const entities = await routeTask({ taskType: TaskType.ENTITY_EXTRACTION, args: { text, tokens } });
   console.log(`ENTITY_EXTRACTION("${text}") -> backend=${entities.backend}, ${entities.result.length} entities`);
 
+  const hypothesis = await routeTask({ taskType: TaskType.HYPOTHESIS_PROPOSAL, args: { proposition: { id: "prop-demo" }, supportingEvidence: ["seen twice"] } });
+  console.log(`HYPOTHESIS_PROPOSAL -> backend=${hypothesis.backend}, status=${hypothesis.result.status}`);
+
+  const verification = await routeTask({ taskType: TaskType.CLAIM_VERIFICATION, args: { claim: { id: "claim-demo" }, options: { independentChecks: [{ name: "check", check: () => true }] } } });
+  console.log(`CLAIM_VERIFICATION -> backend=${verification.backend}, outcome=${verification.result.outcome}`);
+
   const openEnded = await routeTask({ taskType: TaskType.OPEN_ENDED_GENERATION, args: { request: { prompt: "hello" } } });
   console.log(`OPEN_ENDED_GENERATION -> backend=${openEnded.backend}, result=${JSON.stringify(openEnded.result)} (no credential connected in this environment — honest UNKNOWN, not a fabricated reply)`);
 

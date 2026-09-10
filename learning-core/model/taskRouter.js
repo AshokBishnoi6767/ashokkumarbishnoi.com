@@ -37,6 +37,8 @@ const reasoningRealm = require("../language/realm/reasoningRealm");
 const entityRealm = require("../language/realm/entityRealm");
 const knowledgeQueryRealm = require("../language/realm/knowledgeQueryRealm");
 const generationRealm = require("../language/realm/generationRealm");
+const hypothesisRealm = require("../language/realm/hypothesisRealm");
+const verificationRealm = require("../language/realm/verificationRealm");
 const modelRegistry = require("./registry");
 
 const TaskType = Object.freeze({
@@ -46,6 +48,13 @@ const TaskType = Object.freeze({
   ENTITY_EXTRACTION: "ENTITY_EXTRACTION",
   KNOWLEDGE_QUERY: "KNOWLEDGE_QUERY",
   SURFACE_TEXT_GENERATION: "SURFACE_TEXT_GENERATION",
+  // Added Phase 4: Reasoning was routable from the start (M13); Hypothesis
+  // and Verification — the other two Intelligence Core realms (M3/M4) —
+  // were not. Same thin-dispatch pattern as every other deterministic
+  // case below, closing that completeness gap rather than leaving two of
+  // the four Intelligence Core realms unreachable through the router.
+  HYPOTHESIS_PROPOSAL: "HYPOTHESIS_PROPOSAL",
+  CLAIM_VERIFICATION: "CLAIM_VERIFICATION",
   OPEN_ENDED_GENERATION: "OPEN_ENDED_GENERATION",
 });
 
@@ -82,6 +91,12 @@ async function routeTask({ taskType, args = {} }) {
 
     case TaskType.SURFACE_TEXT_GENERATION:
       return { backend: "LANGUAGE_GENERATION_REALM", result: generationRealm.generateSurfaceText(args.record) };
+
+    case TaskType.HYPOTHESIS_PROPOSAL:
+      return { backend: "HYPOTHESIS_REALM", result: hypothesisRealm.proposeHypothesis(args) };
+
+    case TaskType.CLAIM_VERIFICATION:
+      return { backend: "VERIFICATION_REALM", result: verificationRealm.verifyClaim(args.claim, args.options) };
 
     // The one task type with no deterministic mechanism in this
     // codebase. Reached through model/registry.js's own
