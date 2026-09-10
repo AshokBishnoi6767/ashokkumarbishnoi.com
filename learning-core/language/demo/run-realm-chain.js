@@ -5,6 +5,7 @@
  *
  *   SYMBOL -> LEXICAL -> TOKEN -> MORPHOLOGY -> POS -> SYNTAX -> ENTITY
  *   -> RELATIONSHIP -> SEMANTIC REPRESENTATION -> KNOWLEDGE REPRESENTATION
+ *   -> KNOWLEDGE QUERY
  *
  * Run with: node learning-core/language/demo/run-realm-chain.js
  *
@@ -22,6 +23,7 @@ const { extractEntityMentions, groupMentionsByCandidateIdentity } = require("../
 const { extractRelationships } = require("../realm/relationshipRealm");
 const { extractPropositions } = require("../realm/semanticRealm");
 const { extractKnowledge } = require("../realm/knowledgeRealm");
+const { queryKnowledge, indexKnowledgeBySubject } = require("../realm/knowledgeQueryRealm");
 
 function section(title) {
   console.log("\n=== " + title + " ===");
@@ -326,3 +328,68 @@ section("33. Knowledge Realm: never manufactured — honest upstream failures pr
 showKnowledge("John and Google.");
 showKnowledge("The fastest cat runs.");
 showKnowledge("The big red ball.");
+
+section("34. Knowledge Query Realm: exact structural filtering — no ranking, no merging, no reasoning");
+{
+  const text = "John works at Google in Toronto.";
+  const { tokens } = tokenize(text);
+  const records = extractKnowledge(text, tokens).records;
+
+  console.log(`"${text}" -> ${records.length} knowledge records`);
+
+  const byPredicate = queryKnowledge(records, { predicate: "WORKS_IN" });
+  console.log(
+    `queryKnowledge({predicate: "WORKS_IN"}) ->`,
+    byPredicate.map((r) => `${r.subject.surface} --${r.predicate}--> ${r.object.surface}`)
+  );
+
+  const johnId = records[0].subject.id;
+  const bySubjectId = queryKnowledge(records, { subjectId: johnId });
+  console.log(
+    `queryKnowledge({subjectId: "${johnId}"}) -> ${bySubjectId.length} records (both WORKS_AT and WORKS_IN share one subject identity)`
+  );
+
+  const combined = queryKnowledge(records, { subjectSurface: "john", predicate: "WORKS_AT" });
+  console.log(
+    `queryKnowledge({subjectSurface: "john", predicate: "WORKS_AT"}) -> ${combined.length} record` +
+      (combined.length ? `: ${combined[0].subject.surface} --${combined[0].predicate}--> ${combined[0].object.surface}` : "")
+  );
+}
+
+section("35. Knowledge Query Realm: identity vs. surface-form — 'John chased John.' distinguishes subject mention from object mention");
+{
+  const text = "John chased John.";
+  const { tokens } = tokenize(text);
+  const [record] = extractKnowledge(text, tokens).records;
+  console.log(
+    `subjectId=${record.subject.id} objectId=${record.object.id} (same surface "John", different identity)`
+  );
+  console.log(
+    `queryKnowledge({subjectId: subject's id}) -> ${queryKnowledge([record], { subjectId: record.subject.id }).length} match`,
+    `| queryKnowledge({subjectId: object's id}) -> ${queryKnowledge([record], { subjectId: record.object.id }).length} match (the object mention was never a subject)`
+  );
+}
+
+section("36. Knowledge Query Realm: contradictory/duplicate records both come back from a matching query, never merged");
+{
+  const text = "Dog bites man.";
+  const { tokens } = tokenize(text);
+  const dup1 = extractKnowledge(text, tokens).records[0];
+  const dup2 = extractKnowledge(text, tokens).records[0];
+  const results = queryKnowledge([dup1, dup2], { predicate: "BITES" });
+  console.log(
+    `Two separate extractions of "Dog bites man." -> queryKnowledge({predicate: "BITES"}) returns ${results.length} records:`,
+    results.map((r) => r.id)
+  );
+}
+
+section("37. Knowledge Query Realm: indexing groups without merging");
+{
+  const text = "John works at Google in Toronto.";
+  const { tokens } = tokenize(text);
+  const records = extractKnowledge(text, tokens).records;
+  const index = indexKnowledgeBySubject(records);
+  for (const [subjectId, recs] of index.entries()) {
+    console.log(`subject ${subjectId} -> ${recs.length} record(s):`, recs.map((r) => r.predicate));
+  }
+}
