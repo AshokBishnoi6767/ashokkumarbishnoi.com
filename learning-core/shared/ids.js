@@ -16,4 +16,5 @@ module.exports = {
   newInputId: () => makeId("input"),
   newApprovalId: () => makeId("approval"),
   newTokenId: () => makeId("token"),
+  newEntityId: () => makeId("entity"),
 };

@@ -3,7 +3,7 @@
 /**
  * Deterministic demonstration of the realm chain built so far:
  *
- *   SYMBOL -> LEXICAL -> TOKEN -> MORPHOLOGY -> POS -> SYNTAX
+ *   SYMBOL -> LEXICAL -> TOKEN -> MORPHOLOGY -> POS -> SYNTAX -> ENTITY
  *
  * Run with: node learning-core/language/demo/run-realm-chain.js
  *
@@ -17,6 +17,7 @@ const { tokenize, TokenType } = require("../realm/tokenRealm");
 const { analyzeToken } = require("../realm/morphologyRealm");
 const { classifyToken, tagSentence } = require("../realm/posRealm");
 const { findNounPhrases, parseSentence } = require("../realm/syntaxRealm");
+const { extractEntityMentions, groupMentionsByCandidateIdentity } = require("../realm/entityRealm");
 
 function section(title) {
   console.log("\n=== " + title + " ===");
@@ -144,5 +145,52 @@ section("12. Syntax Realm: ambiguity and missing evidence are reported honestly,
     ambiguousVerb.clause.verbCandidates.map((t) => t.text),
     "| reason:",
     ambiguousVerb.clause.reason
+  );
+}
+
+function showEntities(text, opts) {
+  const { tokens } = tokenize(text);
+  const mentions = extractEntityMentions(text, tokens, opts);
+  console.log(`"${text}"`);
+  if (mentions.length === 0) {
+    console.log("  (no entity mentions — ordinary common nouns are not treated as named entities)");
+  }
+  for (const m of mentions) {
+    console.log(`  "${m.surface}" -> ${m.type} [${m.source}] span=[${m.span.tokenStart},${m.span.tokenEnd})`, m.attributes);
+  }
+}
+
+section("13. Entity Realm: ordinary common nouns are NOT entities, even when capitalized by sentence position");
+showEntities("Dog bites man.");
+
+section("14. Entity Realm: PERSON/ORGANIZATION/LOCATION recognized structurally, with spans that track sentence position, not a fixed template");
+showEntities("John works at Google in Toronto.");
+showEntities("Google works with John in Toronto.");
+console.log("Same three entities, different sentence positions — spans below correctly move with the word order.");
+
+section("15. Entity Realm: multi-token entities — a location seed phrase and a structural organization suffix");
+showEntities("New York is big.");
+showEntities("Acme Corp hired John."); // "Acme" is not in any seed list — recognized via the "Corp" suffix alone
+
+section("16. Entity Realm: NUMBER and TIME, reusing the existing temporal/ subsystem rather than reimplementing it");
+showEntities("The team has 42 members.");
+showEntities("The event is at 3 PM.");
+showEntities("The call is at 13 PM."); // shape recognized, value unresolvable -> UNKNOWN, never guessed
+showEntities("The trip is tomorrow.", { now: new Date("2026-09-10T12:00:00Z"), timezone: "UTC" });
+
+section("17. Entity Realm: mention vs. identity — repeated mentions are never silently merged into one real-world entity");
+{
+  const text = "John met John.";
+  const { tokens } = tokenize(text);
+  const mentions = extractEntityMentions(text, tokens);
+  console.log(`"${text}" -> ${mentions.length} separate mentions:`, mentions.map((m) => m.id));
+  const groups = groupMentionsByCandidateIdentity(mentions);
+  console.log(
+    "groupMentionsByCandidateIdentity ->",
+    groups.map((g) => `${g.normalized}/${g.type} (${g.mentionIds.length} mentions)`)
+  );
+  console.log(
+    "This is surface-form clustering ONLY, not a claim these are the same real person —\n" +
+      "that would require coreference/relationship evidence this phase deliberately does not add."
   );
 }
