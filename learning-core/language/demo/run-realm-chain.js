@@ -32,6 +32,7 @@ const math = require("../../math/engine");
 const { assignProbability, resolveUncertainty, representDistribution } = require("../realm/probabilityRealm");
 const { storeKnowledgeAsMemory, storeVerificationAsMemory } = require("../../memory/realmBridge");
 const memoryStore = require("../../memory/store");
+const learningPipeline = require("../../learning/candidatePipeline");
 
 function section(title) {
   console.log("\n=== " + title + " ===");
@@ -612,4 +613,25 @@ section("56. Memory Realm Integration: a KnowledgeRecord stored into the EXISTIN
   const verification = verifyClaim(record, { independentChecks: [{ name: "manual-confirmation", check: () => true }] });
   const verificationMemory = storeVerificationAsMemory(verification);
   console.log(`Verification result stored as PROVENANCE memory, truth_state=${verificationMemory.truth_state}`);
+}
+
+section("57. Learning Engine: a candidate rule cannot reach PROMOTED without passing every gate in order");
+{
+  const rule = { id: "rule-demo", if: { predicate: "IS_A", objectSurface: "bird" }, then: { predicate: "CAN", objectSurface: "fly" } };
+  let candidate = learningPipeline.proposeCandidate({ kind: "REASONING_RULE", payload: rule, evidence: ["user stated this rule three times"] });
+  console.log(`proposeCandidate -> ${candidate.status}`);
+  candidate = learningPipeline.validateCandidate(candidate);
+  console.log(`validateCandidate -> ${candidate.status}`);
+  candidate = learningPipeline.regressionTest(candidate, []);
+  console.log(`regressionTest (against an empty baseline) -> ${candidate.status}`);
+  try {
+    learningPipeline.promoteCandidate(candidate);
+  } catch (err) {
+    console.log(`promoteCandidate before acceptCandidate -> rejected: "${err.message}"`);
+  }
+  candidate = learningPipeline.acceptCandidate(candidate, { approvedBy: "ashok" });
+  console.log(`acceptCandidate({approvedBy:"ashok"}) -> ${candidate.status}`);
+  const { candidate: promoted, memoryRecord } = learningPipeline.promoteCandidate(candidate);
+  console.log(`promoteCandidate -> ${promoted.status}, written to Memory Engine as memory_id=${memoryRecord.memory_id} (class LEARNED_PATTERN)`);
+  console.log(`Full history: ${promoted.history.map((h) => h.status).join(" -> ")}`);
 }

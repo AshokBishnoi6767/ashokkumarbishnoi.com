@@ -70,18 +70,25 @@ function requireArray(value, label) {
   return value;
 }
 
+// Non-throwing predicate version of the same shape check, exported for
+// callers (e.g. the Learning Engine's candidate validation) that need
+// to ask "is this well-formed?" without a try/catch.
+function isValidRuleShape(rule) {
+  return !!(
+    rule &&
+    typeof rule === "object" &&
+    rule.id &&
+    rule.if &&
+    typeof rule.if.predicate === "string" &&
+    typeof rule.if.objectSurface === "string" &&
+    rule.then &&
+    typeof rule.then.predicate === "string" &&
+    typeof rule.then.objectSurface === "string"
+  );
+}
+
 function requireRuleShape(rule) {
-  if (
-    !rule ||
-    typeof rule !== "object" ||
-    !rule.id ||
-    !rule.if ||
-    typeof rule.if.predicate !== "string" ||
-    typeof rule.if.objectSurface !== "string" ||
-    !rule.then ||
-    typeof rule.then.predicate !== "string" ||
-    typeof rule.then.objectSurface !== "string"
-  ) {
+  if (!isValidRuleShape(rule)) {
     throw new TypeError(
       'A rule must have shape { id, if: { predicate, objectSurface }, then: { predicate, objectSurface } }.'
     );
@@ -233,4 +240,4 @@ function checkConsistency(records, { constraints = [] } = {}) {
   return contradictions;
 }
 
-module.exports = { applyRule, applyRules, applyRulesUntilFixedPoint, checkConsistency };
+module.exports = { applyRule, applyRules, applyRulesUntilFixedPoint, checkConsistency, isValidRuleShape };
