@@ -28,6 +28,7 @@ const { buildContextFrame, detectUnresolvedReferences } = require("../realm/cont
 const { applyRule, applyRulesUntilFixedPoint, checkConsistency } = require("../realm/reasoningRealm");
 const { proposeHypothesis, addEvidence, groupHypothesesByProposition } = require("../realm/hypothesisRealm");
 const { verifyClaim, checkProvenance } = require("../realm/verificationRealm");
+const math = require("../../math/engine");
 
 function section(title) {
   console.log("\n=== " + title + " ===");
@@ -529,4 +530,34 @@ section("48. Verification Realm: provenance checking is separate from truth — 
   const verification = verifyClaim(record);
   console.log(`checkProvenance -> complete: ${provenanceCheck.complete}`);
   console.log(`verifyClaim (no independent check supplied) -> ${verification.outcome} — well-formed provenance alone never verifies a claim`);
+}
+
+section("49. Mathematical Engine: arithmetic, algebra, and the invalid cases that never get faked");
+{
+  console.log(`2 + 2 -> ${math.add(2, 2).output}`);
+  console.log(`12 x 17 -> ${math.multiply(12, 17).output}`);
+  console.log(`5 / 0 ->`, math.divide(5, 0));
+  console.log(`x^2 - 5x + 6 = 0 ->`, math.solveQuadratic(1, -5, 6).output);
+  console.log(`x^2 + 1 = 0 ->`, math.solveQuadratic(1, 0, 1).output, "(no fabricated complex roots)");
+}
+
+section("50. Mathematical Engine: vectors, matrices, a real linear system solve");
+{
+  console.log(`[1,2,3] . [4,5,6] -> ${math.dotProduct([1, 2, 3], [4, 5, 6]).output}`);
+  console.log(`det([[6,1,1],[4,-2,5],[2,8,7]]) -> ${math.determinant([[6, 1, 1], [4, -2, 5], [2, 8, 7]]).output}`);
+  const system = math.solveLinearSystem([[2, 1], [1, -1]], [5, 1]);
+  console.log(`Solve 2x+y=5, x-y=1 -> x=${system.output[0]}, y=${system.output[1]}`);
+}
+
+section("51. Mathematical Engine: Bayes' rule — probability is only ever a real computation, never fabricated for prose");
+{
+  const r = math.bayesRule({ pBGivenA: 0.99, pA: 0.01, pB: 0.0198 });
+  console.log(`P(disease|positive test) given P(pos|disease)=0.99, P(disease)=0.01, P(pos)=0.0198 -> ${r.output}`);
+  console.log(`("John may be angry." never receives a number like 0.72 unless a model like this one actually computed it from real inputs.)`);
+}
+
+section("52. Mathematical Engine: gradient descent as an explicit operator — theta_(t+1) = theta_t - eta*grad(L(theta_t))");
+{
+  const r = math.runGradientDescent({ theta0: 0, gradientFn: (x) => 2 * (x - 3), learningRate: 0.1 });
+  console.log(`Minimizing (x-3)^2 from theta0=0 -> converged=${r.output.converged} in ${r.output.iterations} iterations, theta≈${r.output.theta.toFixed(6)}`);
 }
