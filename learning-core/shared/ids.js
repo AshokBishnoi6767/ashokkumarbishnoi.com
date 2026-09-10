@@ -15,4 +15,5 @@ module.exports = {
   newMemoryId: () => makeId("mem"),
   newInputId: () => makeId("input"),
   newApprovalId: () => makeId("approval"),
+  newTokenId: () => makeId("token"),
 };
