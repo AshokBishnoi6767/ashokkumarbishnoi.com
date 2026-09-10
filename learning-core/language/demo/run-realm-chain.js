@@ -819,4 +819,36 @@ section("64. Customer Intelligence: Policy Engine (Phase 7/8) — synthetic refu
   });
   const { executions } = await executePlan(plan, { authorization: auth });
   console.log(`Orchestration plan "${plan.task}": ` + executions.map((e) => `${e.stepId}=${e.portalResult.result}`).join(", "));
+
+  section("66. Meta-Intelligence (Phase 27): task -> required capabilities -> plan, with NO LLM magic — an unresolvable or ambiguous capability is reported, never guessed");
+  const { planForTask } = require("../../universe/metaIntelligence");
+  const { handleCommandCenterRequest } = require("../../universe/commandCenter");
+
+  const goodPlan = planForTask({
+    task: "compute and independently verify 6 x 7",
+    requiredCapabilities: ["cap.exact_computation", "cap.independent_verification"],
+    payloadFor: (capId) =>
+      capId === "cap.exact_computation"
+        ? { operation: "multiply", args: [6, 7] }
+        : { claim: { id: "c1" }, options: { independentChecks: [{ name: "recompute", check: () => math.multiply(6, 7).output === 42 }] } },
+  });
+  console.log(`planForTask(["cap.exact_computation","cap.independent_verification"]) -> plan with ${goodPlan.plan.steps.length} steps, resolved via: ${goodPlan.resolution.map((r) => r.realmId).join(", ")}`);
+
+  const badPlan = planForTask({ task: "do something no realm can do", requiredCapabilities: ["cap.time_travel"] });
+  console.log(`planForTask(["cap.time_travel"]) -> plan=${badPlan.plan} unresolvedCapabilities=${JSON.stringify(badPlan.unresolvedCapabilities)}`);
+
+  const ccHandled = await handleCommandCenterRequest("cc.intelligence_core", {
+    task: "compute 100 / 4",
+    requiredCapabilities: ["cap.exact_computation"],
+    payloadFor: () => ({ operation: "divide", args: [100, 4] }),
+    authorization: auth,
+  });
+  console.log(`Intelligence Core CC handles "compute 100 / 4" -> result=${ccHandled.executions[0].portalResult.result}, escalation=${ccHandled.escalation}`);
+
+  const ccEscalated = await handleCommandCenterRequest("cc.customer_intelligence", {
+    task: "needs mathematics, but this command center doesn't have it in scope",
+    requiredCapabilities: ["cap.exact_computation"],
+    authorization: auth,
+  });
+  console.log(`Customer Intelligence CC given a mathematics request -> escalation: ${ccEscalated.escalation?.reason}`);
 })();

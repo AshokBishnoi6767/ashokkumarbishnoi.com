@@ -9,12 +9,15 @@ const {
   portalRegistry,
   capabilityRegistry,
   commandCenterRegistry,
+  botApplicationRegistry,
   validateRealm,
   validatePortal,
+  validateBotApplication,
   resolveCommandCenterDependencies,
   findRealmsByStatus,
 } = require("../universe/registry");
 const { invokePortal } = require("../universe/portalInvoke");
+const { handleCommandCenterRequest } = require("../universe/commandCenter");
 const { createAuthorization, createPortalRequest, PortalResultStatus } = require("../universe/protocol");
 const { RealmStatus } = require("../shared/constants");
 
@@ -23,6 +26,7 @@ before(() => {
   realmRegistry._reset();
   portalRegistry._reset();
   commandCenterRegistry._reset();
+  botApplicationRegistry._reset();
   bootstrap();
 });
 
@@ -125,4 +129,33 @@ test("bootstrap: cross-realm — Mathematics computes, Verification independentl
     })
   );
   assert.equal(verifyResWithCheck.result, "VERIFIED");
+});
+
+test("bootstrap: both registered bot applications validate clean — every portal they list is real and registered", () => {
+  assert.equal(botApplicationRegistry.count(), 2);
+  for (const bot of botApplicationRegistry.list()) {
+    assert.deepEqual(validateBotApplication(bot), [], `bot '${bot.id}' should validate clean`);
+  }
+});
+
+test("bootstrap: end-to-end Command Center request — Intelligence Core CC handles a real math capability request with no escalation", async () => {
+  const res = await handleCommandCenterRequest("cc.intelligence_core", {
+    task: "compute 12 x 17",
+    requiredCapabilities: ["cap.exact_computation"],
+    payloadFor: () => ({ operation: "multiply", args: [12, 17] }),
+    authorization: auth,
+  });
+  assert.equal(res.status, "HANDLED");
+  assert.equal(res.executions[0].portalResult.result, 204);
+  assert.equal(res.escalation, null);
+});
+
+test("bootstrap: Command Center escalation is real — Customer Intelligence CC cannot serve a mathematics capability from its own scope", async () => {
+  const res = await handleCommandCenterRequest("cc.customer_intelligence", {
+    task: "needs math, wrong command center",
+    requiredCapabilities: ["cap.exact_computation"],
+    authorization: auth,
+  });
+  assert.ok(res.escalation);
+  assert.equal(res.escalation.unresolvedCapabilities[0].capabilityId, "cap.exact_computation");
 });

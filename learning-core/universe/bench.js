@@ -78,6 +78,23 @@ function invokeSyncUnauthorized(portalId, request) {
   return invokeSyncWithAuth(portalId, request, DENIED_AUTHORIZATION);
 }
 
+// A synchronous runner for an already-CONSTRUCTED OrchestrationPlan
+// (see metaIntelligence.js's planForTask, itself synchronous) — for
+// benchmark cases exercising real multi-capability composition without
+// needing benchmark.js's accepted synchronous contract to change.
+// Dependency ordering is NOT resolved here (unlike orchestrator.js's
+// real executePlan) — every registered realm's execute() in this
+// milestone is independent, so plans built for benchmarking never
+// declare dependsOn; a plan that does should go through the real,
+// async executePlan() instead.
+function runPlanSync(plan, { authorization = GRANTED } = {}) {
+  const { createRealmExecution } = require("./protocol");
+  return plan.steps.map((step) => {
+    const result = invokeSyncWithAuth(step.portalId, step.payload, authorization);
+    return createRealmExecution({ planId: plan.id, stepId: step.stepId, portalId: step.portalId, realmId: result.realmId, status: result.status, input: step.payload, portalResult: result });
+  });
+}
+
 // A synchronous re-implementation of a small, dependency-free
 // (all-parallel) orchestration plan, mirroring orchestrator.js's real
 // (async) executePlan() logic exactly for this simple case.
@@ -104,4 +121,4 @@ function validateAllRealms() {
   return problems;
 }
 
-module.exports = { invokeSync, invokeSyncUnauthorized, crossRealmVerify, runParallelPlan, validateAllRealms };
+module.exports = { invokeSync, invokeSyncUnauthorized, crossRealmVerify, runParallelPlan, runPlanSync, validateAllRealms };

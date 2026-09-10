@@ -8,6 +8,7 @@ const {
   realmRegistry,
   portalRegistry,
   commandCenterRegistry,
+  botApplicationRegistry,
   findRealmsByCategory,
   findRealmsByCapability,
   findRealmsByStatus,
@@ -16,8 +17,9 @@ const {
   findPortalByName,
   validatePortal,
   resolveCommandCenterDependencies,
+  validateBotApplication,
 } = require("../universe/registry");
-const { createCapability, createRealm, createPortal, createCommandCenter } = require("../universe/domain");
+const { createCapability, createRealm, createPortal, createCommandCenter, createBotApplication } = require("../universe/domain");
 const { RealmStatus, PortalStatus } = require("../shared/constants");
 
 beforeEach(() => {
@@ -25,6 +27,7 @@ beforeEach(() => {
   realmRegistry._reset();
   portalRegistry._reset();
   commandCenterRegistry._reset();
+  botApplicationRegistry._reset();
 });
 
 test("registry: register/get/list/has/count all work, discovery only — nothing executes on registration", () => {
@@ -105,4 +108,24 @@ test("resolveCommandCenterDependencies: reports missing realms/portals rather th
 test("resolveCommandCenterDependencies: an unregistered command center id is reported unresolved, never a throw or a fabricated result", () => {
   const result = resolveCommandCenterDependencies("cc.nonexistent");
   assert.equal(result.resolved, false);
+});
+
+test("botApplicationRegistry: register/get/list work like every other registry", () => {
+  const bot = createBotApplication({ id: "bot.a", name: "A", portals: [] });
+  botApplicationRegistry.register(bot);
+  assert.equal(botApplicationRegistry.get("bot.a"), bot);
+  assert.deepEqual(botApplicationRegistry.list(), [bot]);
+});
+
+test("validateBotApplication: catches a bot referencing an unregistered portal — a fabricated composition, never a silent pass", () => {
+  const bot = createBotApplication({ id: "bot.a", name: "A", portals: ["portal.missing"] });
+  const problems = validateBotApplication(bot);
+  assert.equal(problems.length, 1);
+  assert.ok(problems[0].includes("portal.missing"));
+});
+
+test("validateBotApplication: a bot whose every portal is actually registered validates clean", () => {
+  portalRegistry.register(createPortal({ id: "portal.a", name: "A", realmId: "realm.a" }));
+  const bot = createBotApplication({ id: "bot.a", name: "A", portals: ["portal.a"] });
+  assert.deepEqual(validateBotApplication(bot), []);
 });

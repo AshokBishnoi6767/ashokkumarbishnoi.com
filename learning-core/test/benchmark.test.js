@@ -56,6 +56,12 @@ test("Benchmark: every UNIVERSE_* category case passes — portal routing, autho
   }
 });
 
+test("Benchmark: UNIVERSE_COMPOSITION cases all pass — single-realm, multi-realm, unknown-capability, and unauthorized-realm composition are all real", () => {
+  const result = runBenchmark();
+  assert.equal(result.by_category.UNIVERSE_COMPOSITION.passed, result.by_category.UNIVERSE_COMPOSITION.total);
+  assert.equal(result.by_category.UNIVERSE_COMPOSITION.total, 4);
+});
+
 test("Benchmark: the deduction MECHANISM passes even though NL parsing of the classic syllogism does not — these are different capabilities", () => {
   const result = runBenchmark();
   const byId = Object.fromEntries(result.results.map((r) => [r.id, r]));

@@ -51,6 +51,8 @@ const policyEngine = require("../policy/engine");
 const { ConditionOperator } = require("../shared/constants");
 const universeBench = require("../universe/bench");
 const { bootstrap } = require("../universe/bootstrap");
+const { planForTask } = require("../universe/metaIntelligence");
+const universeProtocol = require("../universe/protocol");
 
 bootstrap();
 
@@ -401,6 +403,59 @@ const BENCHMARK_CASES = [
     run: () => {
       const problems = universeBench.validateAllRealms();
       return { passed: problems.length === 0, detail: problems };
+    },
+  },
+  {
+    id: "universe_composition_single_realm",
+    category: "UNIVERSE_COMPOSITION",
+    description: "SINGLE-REALM: a task naming one required capability plans and executes through exactly one real portal.",
+    run: () => {
+      const { plan, unresolvedCapabilities } = planForTask({
+        task: "compute 2+2",
+        requiredCapabilities: ["cap.exact_computation"],
+        payloadFor: () => ({ operation: "add", args: [2, 2] }),
+      });
+      const executions = universeBench.runPlanSync(plan);
+      const passed = unresolvedCapabilities.length === 0 && executions.length === 1 && executions[0].portalResult.result === 4;
+      return { passed, detail: executions.map((e) => ({ portalId: e.portalId, result: e.portalResult.result })) };
+    },
+  },
+  {
+    id: "universe_composition_multi_realm",
+    category: "UNIVERSE_COMPOSITION",
+    description: "MULTI-REALM: a task naming two independent capabilities (mathematics + verification) plans and executes through two distinct real realms.",
+    run: () => {
+      const { plan, resolution } = planForTask({
+        task: "compute and independently verify",
+        requiredCapabilities: ["cap.exact_computation", "cap.independent_verification"],
+        payloadFor: (capId) =>
+          capId === "cap.exact_computation"
+            ? { operation: "multiply", args: [6, 7] }
+            : { claim: { id: "claim-x" }, options: { independentChecks: [{ name: "recompute", check: () => math.multiply(6, 7).output === 42 }] } },
+      });
+      const executions = universeBench.runPlanSync(plan);
+      const realmIds = new Set(resolution.map((r) => r.realmId));
+      const passed = realmIds.size === 2 && executions.every((e) => e.status === "RESULT");
+      return { passed, detail: { realmIds: [...realmIds], results: executions.map((e) => e.portalResult.result) } };
+    },
+  },
+  {
+    id: "universe_composition_unknown_capability",
+    category: "UNIVERSE_COMPOSITION",
+    description: "UNKNOWN-REALM: a task requiring a capability no realm provides is reported unresolved, never given a fabricated step or a silently-dropped one.",
+    run: () => {
+      const { plan, unresolvedCapabilities } = planForTask({ task: "do something nobody can do", requiredCapabilities: ["cap.does_not_exist"] });
+      return { passed: plan === null && unresolvedCapabilities.length === 1, detail: unresolvedCapabilities };
+    },
+  },
+  {
+    id: "universe_composition_unauthorized_realm",
+    category: "UNIVERSE_COMPOSITION",
+    description: "UNAUTHORIZED-REALM: a real, resolvable plan is still refused at execution when no authorization is granted — planning and authorization stay separate.",
+    run: () => {
+      const { plan } = planForTask({ task: "compute", requiredCapabilities: ["cap.exact_computation"], payloadFor: () => ({ operation: "add", args: [1, 1] }) });
+      const executions = universeBench.runPlanSync(plan, { authorization: universeProtocol.DENIED_AUTHORIZATION });
+      return { passed: executions[0].status === "UNAUTHORIZED", detail: executions[0] };
     },
   },
 ];

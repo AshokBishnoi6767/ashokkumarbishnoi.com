@@ -64,6 +64,7 @@ const capabilityRegistry = createRegistry("CapabilityRegistry");
 const realmRegistry = createRegistry("RealmRegistry");
 const portalRegistry = createRegistry("PortalRegistry");
 const commandCenterRegistry = createRegistry("CommandCenterRegistry");
+const botApplicationRegistry = createRegistry("BotApplicationRegistry");
 
 // -----------------------------------------------------------------
 // Realm-specific discovery helpers
@@ -136,11 +137,26 @@ function resolveCommandCenterDependencies(commandCenterId) {
   return { resolved: missingRealms.length === 0 && missingPortals.length === 0, missingRealms, missingPortals };
 }
 
+// -----------------------------------------------------------------
+// Bot Application discovery helpers
+// -----------------------------------------------------------------
+
+// A bot referencing a portal id that isn't actually registered would
+// be exactly the "hallucinated capability" the spec forbids — caught
+// here the same way validatePortal/validateRealm catch a dangling
+// reference for their own contracts.
+function validateBotApplication(bot) {
+  const missingPortals = bot.portals.filter((id) => !portalRegistry.has(id));
+  return missingPortals.length ? [`references unregistered portal(s): ${missingPortals.join(", ")}`] : [];
+}
+
 module.exports = {
   capabilityRegistry,
   realmRegistry,
   portalRegistry,
   commandCenterRegistry,
+  botApplicationRegistry,
+  validateBotApplication,
   findRealmsByCategory,
   findRealmsByCapability,
   findRealmsByStatus,

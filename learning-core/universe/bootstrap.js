@@ -41,8 +41,8 @@
  * PLANNED) definitions.
  */
 
-const { createCapability, createRealm, createPortal, createCommandCenter } = require("./domain");
-const { capabilityRegistry, realmRegistry, portalRegistry, commandCenterRegistry } = require("./registry");
+const { createCapability, createRealm, createPortal, createCommandCenter, createBotApplication } = require("./domain");
+const { capabilityRegistry, realmRegistry, portalRegistry, commandCenterRegistry, botApplicationRegistry } = require("./registry");
 const { RealmStatus, PortalStatus } = require("../shared/constants");
 
 const math = require("../math/engine");
@@ -266,6 +266,35 @@ function bootstrap() {
       description: "PLANNED realms not yet built — grouped so their eventual implementation has a home without further redesign.",
       realmIds: ["realm.physics", "realm.coding", "realm.multimodal", "realm.research", "realm.biology"],
       portalIds: ["portal.physics", "portal.coding", "portal.multimodal", "portal.research", "portal.biology"],
+    })
+  );
+
+  // -------------------------------------------------------------
+  // Bot Applications (Phase 15) — a bot is a user-facing manifestation
+  // of one or more portals, not forced into one-bot-one-realm. These
+  // two are real: every portal id they list is a registered, ACTIVE
+  // portal backed by real intelligence (no fabricated composition).
+  // -------------------------------------------------------------
+  botApplicationRegistry.register(
+    createBotApplication({
+      id: "bot.general_intelligence",
+      name: "General Intelligence Bot",
+      description: "A composition of every IMPLEMENTED/VERIFIED realm's portal — the Intelligence Core Command Center as one bot.",
+      primaryRealm: "realm.language",
+      portals: ["portal.language", "portal.mathematics", "portal.reasoning", "portal.verification", "portal.hypothesis", "portal.probability"],
+      capabilities: capabilities.map((c) => c.id).filter((id) => id !== "cap.policy_evaluation"),
+      benchmarkProfile: "intelligence_core",
+    })
+  );
+  botApplicationRegistry.register(
+    createBotApplication({
+      id: "bot.customer_support",
+      name: "Customer Support Bot",
+      description: "A single-portal bot — proves a BotApplication need not span multiple realms.",
+      primaryRealm: "realm.policy",
+      portals: ["portal.policy"],
+      capabilities: ["cap.policy_evaluation"],
+      benchmarkProfile: "customer_intelligence",
     })
   );
 }
