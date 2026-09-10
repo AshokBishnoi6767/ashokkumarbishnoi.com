@@ -30,6 +30,8 @@ const { proposeHypothesis, addEvidence, groupHypothesesByProposition } = require
 const { verifyClaim, checkProvenance } = require("../realm/verificationRealm");
 const math = require("../../math/engine");
 const { assignProbability, resolveUncertainty, representDistribution } = require("../realm/probabilityRealm");
+const { storeKnowledgeAsMemory, storeVerificationAsMemory } = require("../../memory/realmBridge");
+const memoryStore = require("../../memory/store");
 
 function section(title) {
   console.log("\n=== " + title + " ===");
@@ -595,4 +597,19 @@ section("55. Probability/Uncertainty Realm: a distribution is validated, never a
   console.log("Fair coin {heads:0.5, tails:0.5} ->", representDistribution([{ label: "heads", probability: 0.5 }, { label: "tails", probability: 0.5 }]).valid);
   const bad = representDistribution([{ label: "a", probability: 0.3 }, { label: "b", probability: 0.3 }]);
   console.log(`{a:0.3, b:0.3} (sums to 0.6) -> valid=${bad.valid}, error="${bad.error}"`);
+}
+
+section("56. Memory Realm Integration: a KnowledgeRecord stored into the EXISTING memory/store.js Memory Engine, content preserved whole");
+{
+  const text = "John works at Google.";
+  const { tokens } = tokenize(text);
+  const [record] = extractKnowledge(text, tokens).records;
+  const memory = storeKnowledgeAsMemory(record);
+  console.log(`Stored as memory_id=${memory.memory_id}, class=SEMANTIC, truth_state=${memory.truth_state}, related_entities=${JSON.stringify(memory.related_entities)}`);
+  const recalled = memoryStore.recall("SEMANTIC", memory.memory_id);
+  console.log(`Recalled content matches the original KnowledgeRecord: ${JSON.stringify(recalled.content) === JSON.stringify(record)}`);
+
+  const verification = verifyClaim(record, { independentChecks: [{ name: "manual-confirmation", check: () => true }] });
+  const verificationMemory = storeVerificationAsMemory(verification);
+  console.log(`Verification result stored as PROVENANCE memory, truth_state=${verificationMemory.truth_state}`);
 }
