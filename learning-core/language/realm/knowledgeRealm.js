@@ -73,6 +73,11 @@ function buildKnowledgeRecord(proposition) {
     subject: proposition.subject,
     predicate: proposition.predicate,
     object: proposition.object,
+    // Structural polarity, carried forward unchanged — see
+    // semanticRealm.js and relationshipRealm.js. This is the exact
+    // field reasoningRealm.js's checkConsistency reads for
+    // POLARITY_CONTRADICTION detection.
+    polarity: proposition.polarity,
     // Epistemic fields carried forward verbatim — never recalculated,
     // never collapsed into one another. See module doc above.
     truth_state: proposition.truth_state,

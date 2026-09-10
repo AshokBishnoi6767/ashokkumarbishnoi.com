@@ -42,14 +42,16 @@
  * driven by data the caller supplies, never invented here:
  *   1. POLARITY_CONTRADICTION — two records share subject identity,
  *      predicate, and object identity/surface, but one carries an
- *      explicit `polarity: "NEGATIVE"` field the other lacks (default
- *      polarity is POSITIVE when the field is absent). This is how
- *      "John is in Toronto." / "John is not in Toronto." is
+ *      explicit `polarity: Polarity.NEGATIVE` field the other lacks
+ *      (default polarity is POSITIVE when the field is absent). This is
+ *      how "John is in Toronto." / "John is not in Toronto." is
  *      represented here — as two explicit KnowledgeRecord-shaped
- *      objects with opposite polarity, not by parsing the word "not"
- *      (no existing realm extracts negation; inventing that parse here
- *      would be exactly the kind of fabricated semantics this
- *      architecture forbids).
+ *      objects with opposite polarity. As of Phase 5, `polarity` is
+ *      genuinely populated by the real chain (relationshipRealm.js
+ *      structurally detects "not"; see its module doc) as well as by
+ *      hand-built records — this realm still never parses text itself
+ *      or infers polarity on its own; it only ever compares whatever
+ *      `polarity` field the records it is given already carry.
  *   2. CONSTRAINT_CONTRADICTION — for a predicate the caller has
  *      explicitly declared SINGLE_VALUE (e.g. "a person has exactly
  *      one home city"), two-or-more records sharing a subject identity
@@ -60,7 +62,7 @@
  * realm's job (Verification, working from independent evidence).
  */
 
-const { TruthState } = require("../../shared/constants");
+const { TruthState, Polarity } = require("../../shared/constants");
 const { newReasoningId, newContradictionId, newEntityId } = require("../../shared/ids");
 
 function requireArray(value, label) {
@@ -196,7 +198,7 @@ function checkConsistency(records, { constraints = [] } = {}) {
     byPolarityKey.get(key).push(record);
   }
   for (const [, group] of byPolarityKey) {
-    const polarities = new Set(group.map((r) => r.polarity || "POSITIVE"));
+    const polarities = new Set(group.map((r) => r.polarity || Polarity.POSITIVE));
     if (polarities.size > 1) {
       contradictions.push({
         id: newContradictionId(),

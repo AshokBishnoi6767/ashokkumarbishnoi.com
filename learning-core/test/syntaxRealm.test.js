@@ -156,6 +156,33 @@ test("Clause structure: a real VERB pivot always wins over the copula fallback â
   assert.equal(result.clause.verb.pivotType, "VERB");
 });
 
+test("Clause structure: do-support negation â€” 'John does not work at Google.' pivots on 'work', not the ambiguous AUX/VERB 'does'", () => {
+  const { tokens } = tokenize("John does not work at Google.");
+  const result = parseSentence(tokens);
+
+  assert.equal(result.clause.state, 1);
+  assert.equal(result.clause.verb.token.text, "work");
+  assert.equal(result.clause.verb.pivotType, "DO_SUPPORT_NEGATION");
+  assert.equal(result.clause.verb.negated, true);
+  // "does"/"not" are excluded from the subject span, not swallowed into it.
+  assert.deepEqual(result.clause.subject.tokens.map((t) => t.text), ["John"]);
+});
+
+test("Clause structure: 'does' as an ordinary main verb (no following 'not') is unaffected by the do-support negation pivot", () => {
+  const { tokens } = tokenize("John does his homework.");
+  const result = parseSentence(tokens);
+  assert.equal(result.clause.state, 1);
+  assert.equal(result.clause.verb.token.text, "does");
+  assert.equal(result.clause.verb.pivotType, "VERB");
+  assert.equal(result.clause.verb.negated, false);
+});
+
+test("Clause structure: a real VERB pivot's negated flag is false (not undefined)", () => {
+  const { tokens } = tokenize("Dog bites man.");
+  const result = parseSentence(tokens);
+  assert.equal(result.clause.verb.negated, false);
+});
+
 test("Clause structure: two or more unambiguous AUX tokens with no VERB candidate is reported ambiguous, never a forced copula pick", () => {
   // "should" and "must" are both single-tag CLOSED_CLASS AUX entries
   // (unlike "can"/"will"/"may", which stay ambiguous with NOUN), and

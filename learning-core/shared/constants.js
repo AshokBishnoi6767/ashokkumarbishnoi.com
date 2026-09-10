@@ -156,6 +156,16 @@ const UncertaintyStatus = Object.freeze({
   ABSENT: "ABSENT",
 });
 
+// Polarity is a structural fact about how a clause was stated ("works
+// at" vs. "does not work at"), never a truth judgment — POSITIVE/
+// NEGATIVE describes the assertion's surface polarity only. See
+// reasoningRealm.js's checkConsistency, which already compared against
+// these exact string values by convention before this enum existed.
+const Polarity = Object.freeze({
+  POSITIVE: "POSITIVE",
+  NEGATIVE: "NEGATIVE",
+});
+
 const Modality = Object.freeze({
   TEXT: "TEXT",
   IMAGE: "IMAGE",
@@ -205,6 +215,7 @@ module.exports = {
   HypothesisStatus,
   ProbabilityStatus,
   UncertaintyStatus,
+  Polarity,
   Modality,
   ProcessingStatus,
   MemoryClass,

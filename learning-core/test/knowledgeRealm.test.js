@@ -149,6 +149,13 @@ test("Determinism: identical input yields structurally identical knowledge recor
   }
 });
 
+test("Polarity (Phase 5): carried forward from the Proposition unchanged, all the way to KnowledgeRecord — same field reasoningRealm.js's checkConsistency reads", () => {
+  const positive = extract("John works at Google.").records[0];
+  const negative = extract("John does not work at Google.").records[0];
+  assert.equal(positive.polarity, "POSITIVE");
+  assert.equal(negative.polarity, "NEGATIVE");
+});
+
 test("Never manufactured: honest upstream failures (no verb, intransitive, ambiguous) propagate to zero knowledge records", () => {
   for (const text of ["John and Google.", "The fastest cat runs.", "The big red ball.", "Dogs cats chase."]) {
     const result = extract(text);

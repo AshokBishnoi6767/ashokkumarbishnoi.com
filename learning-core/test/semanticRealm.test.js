@@ -163,6 +163,21 @@ test("Temporal information: a resolved DATE entity flows through unchanged, neve
   assert.ok(todayProp.object.attributes.resolved_date);
 });
 
+test("Polarity (Phase 5): copula and do-support negation both surface as an unchanged predicate with polarity NEGATIVE — truth_state/confidence/probability/uncertainty are untouched", () => {
+  const affirmative = extract("John is in Toronto.").propositions[0];
+  const negated = extract("John is not in Toronto.").propositions[0];
+  assert.equal(affirmative.polarity, "POSITIVE");
+  assert.equal(negated.polarity, "NEGATIVE");
+  assert.equal(affirmative.predicate, negated.predicate);
+  // Negation is structural, never epistemic: a NEGATIVE polarity is not
+  // evidence of falsehood, so every epistemic field stays exactly what
+  // a freshly-extracted, unverified proposition always has.
+  assert.equal(negated.truth_state, TruthState.UNKNOWN);
+  assert.equal(negated.confidence, null);
+  assert.equal(negated.probability, ProbabilityStatus.NOT_DEFINED);
+  assert.equal(negated.uncertainty, UncertaintyStatus.PRESENT);
+});
+
 test("Determinism: identical input yields structurally identical propositions except for generated ids", () => {
   const a = extract("John works at Google in Toronto.").propositions;
   const b = extract("John works at Google in Toronto.").propositions;

@@ -169,3 +169,38 @@ test("Relationship id is independent of either argument's id", () => {
   assert.notEqual(rel.id, rel.subject.id);
   assert.notEqual(rel.id, rel.object.id);
 });
+
+test("Polarity (Phase 5): a plain affirmative sentence carries polarity POSITIVE", () => {
+  const rel = extract("Dog bites man.").relationships[0];
+  assert.equal(rel.polarity, "POSITIVE");
+});
+
+test("Polarity (Phase 5): copula negation — 'John is not in Toronto.' carries polarity NEGATIVE with the SAME predicate as the affirmative form", () => {
+  const affirmative = extract("John is in Toronto.").relationships[0];
+  const negated = extract("John is not in Toronto.").relationships[0];
+  assert.equal(affirmative.polarity, "POSITIVE");
+  assert.equal(negated.polarity, "NEGATIVE");
+  assert.equal(affirmative.predicate, negated.predicate);
+  assert.deepEqual(simplify(negated), { subject: "John", predicate: "IS_IN", object: "Toronto" });
+});
+
+test("Polarity (Phase 5): do-support negation — 'Dog does not bite man.' carries polarity NEGATIVE, subject/object unaffected", () => {
+  const result = extract("Dog does not bite man.");
+  assert.equal(result.relationships.length, 1);
+  const rel = result.relationships[0];
+  assert.equal(rel.polarity, "NEGATIVE");
+  assert.deepEqual(simplify(rel), { subject: "Dog", predicate: "BITE", object: "man" });
+});
+
+test("Polarity (Phase 5): do-support negation negates every relationship sharing the clause, not just the first PP chunk", () => {
+  const result = extract("John does not work at Google in Toronto.");
+  assert.equal(result.relationships.length, 2);
+  assert.ok(result.relationships.every((r) => r.polarity === "NEGATIVE"));
+});
+
+test("Polarity (Phase 5): 'does' as an ordinary main verb (no following 'not') stays POSITIVE — do-support detection never fires without 'not'", () => {
+  const result = extract("John does business.");
+  assert.equal(result.relationships.length, 1);
+  assert.equal(result.relationships[0].polarity, "POSITIVE");
+  assert.equal(result.relationships[0].attributes.verb, "does");
+});

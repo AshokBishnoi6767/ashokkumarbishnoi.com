@@ -223,7 +223,7 @@ function showRelationships(text, opts) {
   for (const rel of result.relationships) {
     console.log(
       `  ${rel.subject.surface} --${rel.predicate}--> ${rel.object.surface}` +
-        `  (subject=${rel.subject.type}, object=${rel.object.type}, verb="${rel.attributes.verb}", prep=${rel.attributes.preposition})`
+        `  (subject=${rel.subject.type}, object=${rel.object.type}, verb="${rel.attributes.verb}", prep=${rel.attributes.preposition}, polarity=${rel.polarity})`
     );
   }
 }
@@ -696,6 +696,25 @@ console.log("    already-resolved noun-phrase head the same way subject resoluti
 showRelationships("Penguins are birds.");
 console.log("  ^ still honestly unresolved: 'Penguins'/'birds' both carry a genuine NOUN/VERB morphological ambiguity ('-s'), so Syntax");
 console.log("    reports the verb pivot as ambiguous rather than guessing. A documented, still-open gap, not silently papered over.");
+
+section("63. Phase 5: negation/polarity — copula and do-support negation are now structurally detected, without converting negation into truth");
+showRelationships("John works at Google.");
+showRelationships("John does not work at Google.");
+console.log("  ^ do-support: 'does'+'not'+bare-verb is a closed grammatical construction — 'work' becomes the real pivot, not the");
+console.log("    ambiguous AUX/VERB 'does'. Note the predicate is 'WORK_AT', not 'WORKS_AT': do-support always pairs with the bare");
+console.log("    infinitive, a separate, pre-existing limitation (no verb-form/lemma normalization anywhere in this architecture yet).");
+showRelationships("The dog is not happy.");
+console.log("  ^ copula negation: 'not' is consumed inside the object chunk walk, same predicate-folding mechanism as a preposition.");
+{
+  const positive = extractKnowledge("John is in Toronto.", tokenize("John is in Toronto.").tokens).records[0];
+  const negativeRaw = extractKnowledge("John is not in Toronto.", tokenize("John is not in Toronto.").tokens).records[0];
+  console.log(`"John is in Toronto." polarity=${positive.polarity}  "John is not in Toronto." polarity=${negativeRaw.polarity}  (same predicate: ${positive.predicate === negativeRaw.predicate})`);
+  console.log("Each independent extraction mints its own entity id for 'John' (no coreference at this layer, by design) —");
+  console.log("unifying subject identity below simulates what a future Coreference/Context realm would eventually hand Reasoning:");
+  const negative = { ...negativeRaw, subject: positive.subject };
+  const contradictions = checkConsistency([positive, negative]);
+  console.log(`checkConsistency([positive, negative]) -> ${contradictions.length} contradiction(s): ${contradictions.map((c) => c.type).join(", ")}`);
+}
 
 (async () => {
   const arithmetic = await routeTask({ taskType: TaskType.ARITHMETIC, args: { operation: "multiply", params: [12, 17] } });

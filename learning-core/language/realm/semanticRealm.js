@@ -71,15 +71,15 @@
  * and it does not classify Google as a "company" or John as a "person"
  * beyond whatever EntityType the Entity Realm already assigned.
  *
- * === Known limitation: negation ===
- * The POS Realm tags "not" as PART (see posRealm.js CLOSED_CLASS), but
- * neither the Syntax Realm's clause shape nor the Relationship Realm's
- * triples carry a negation flag anywhere. "John does not work at
- * Google." therefore still surfaces (if it parses at all) as an
- * unnegated WORKS_AT proposition — there is no safe way to represent
- * negation without changing the Syntax/Relationship contract, which is
- * out of scope for this milestone. This is a documented gap, not faked
- * support.
+ * === Negation / polarity (Phase 5) ===
+ * A Proposition's `polarity` field (POSITIVE/NEGATIVE, shared/
+ * constants.js) is copied forward verbatim from the Relationship Realm,
+ * which is where "not" is actually detected structurally (do-support
+ * negation at the Syntax layer, or a leading "not" inside an object
+ * chunk — see relationshipRealm.js). This realm never inspects the
+ * source text for "not" itself and never lets polarity influence
+ * truth_state/confidence/probability/uncertainty — a negative polarity
+ * is not evidence of falsehood, only of how the clause was stated.
  *
  * === Temporal information ===
  * Carried forward, never invented: when the Entity Realm already
@@ -106,6 +106,11 @@ function buildProposition(relationship, text) {
     subject: relationship.subject,
     predicate: relationship.predicate,
     object: relationship.object,
+    // Structural polarity, carried forward unchanged from the
+    // Relationship Realm — never recalculated, never used to move
+    // truth_state/confidence/probability/uncertainty below. See
+    // relationshipRealm.js's own module doc for how it is detected.
+    polarity: relationship.polarity,
     source: relationship.source,
     evidence: {
       relationship_id: relationship.id,

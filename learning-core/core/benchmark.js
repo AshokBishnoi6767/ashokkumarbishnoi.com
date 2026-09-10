@@ -132,7 +132,7 @@ const BENCHMARK_CASES = [
   {
     id: "contradiction_coexistence",
     category: "CONTRADICTION_DETECTION",
-    description: "'John is in Toronto.' / 'John is not in Toronto.' (represented via explicit polarity, since no realm extracts negation) coexist; neither is deleted, both are flagged.",
+    description: "'John is in Toronto.' / 'John is not in Toronto.' represented via explicit polarity on hand-built records coexist; neither is deleted, both are flagged.",
     run: () => {
       const john = { id: "entity-john", surface: "John" };
       const toronto = { id: "entity-toronto", surface: "Toronto" };
@@ -141,6 +141,27 @@ const BENCHMARK_CASES = [
       const contradictions = checkConsistency([positive, negative]);
       const passed = contradictions.length === 1 && contradictions[0].conflicting_records.length === 2;
       return { passed, detail: { contradictions: contradictions.length, type: contradictions[0] && contradictions[0].type } };
+    },
+  },
+  {
+    id: "negation_real_chain",
+    category: "CONTRADICTION_DETECTION",
+    description: "'John is in Toronto.' / 'John is not in Toronto.' — predicate AND polarity now come from real parsing (Phase 5), not hand-built records; unifying subject identity (simulating a future Coreference realm) lets checkConsistency flag the real contradiction.",
+    run: () => {
+      const positive = parse("John is in Toronto.").records[0];
+      const negativeRaw = parse("John is not in Toronto.").records[0];
+      if (!positive || !negativeRaw) {
+        return { passed: false, detail: { reason: "one or both sentences failed to parse" } };
+      }
+      const negative = { ...negativeRaw, subject: positive.subject };
+      const contradictions = checkConsistency([positive, negative]);
+      const passed =
+        positive.polarity === "POSITIVE" &&
+        negativeRaw.polarity === "NEGATIVE" &&
+        positive.predicate === negativeRaw.predicate &&
+        contradictions.length === 1 &&
+        contradictions[0].type === "POLARITY_CONTRADICTION";
+      return { passed, detail: { positivePolarity: positive.polarity, negativePolarity: negativeRaw.polarity, predicate: positive.predicate, contradictions: contradictions.length } };
     },
   },
   {

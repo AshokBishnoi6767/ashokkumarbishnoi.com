@@ -53,6 +53,13 @@
  *     unambiguous AUX tokens is still reported ambiguous, never guessed.
  *     `clause.verb.pivotType` reports which case produced the pivot
  *     ("VERB" or "COPULA_AUX") so callers can tell them apart.
+ *   - Do-support negation fallback (Phase 5): "do"/"does"/"did"
+ *     immediately followed by "not" immediately followed by a bare
+ *     content word with zero POS evidence is a closed grammatical
+ *     construction — the bare word becomes the pivot instead of the
+ *     ambiguous AUX/VERB "does", and `clause.verb.negated` is true.
+ *     `pivotType` reports "DO_SUPPORT_NEGATION" for this case. This
+ *     never fires when "does"/"do"/"did" is not followed by "not".
  *   - A phrase span longer than one token is only assigned a head when
  *     it matches the DET + ADJ* + NOUN pattern exactly across its whole
  *     span. If a token within that span carries both ADJ and NOUN among
@@ -187,7 +194,58 @@ function findCopulaPivot(tokens, posResults) {
   return null;
 }
 
+// do/does/did + "not" + a bare content word ("John does not work at
+// Google.") is a hard, closed grammatical construction (do-support
+// negation) — not a guess. Without this, the primary VERB scan below
+// picks "does" itself as the pivot (do/does/did are deliberately
+// ambiguous AUX/VERB in CLOSED_CLASS — see posRealm.js), because the
+// real content verb ("work") gets ZERO POS candidates: it is a bare,
+// uninflected form with no suffix morphology could strip, and POS's
+// one-token lookback breaks on the intervening "not" so the existing
+// AFTER_AUX_BARE_VERB context rule never reaches it either. This check
+// runs first and, only when it matches every part of the pattern
+// exactly, treats the bare word as the real pivot instead — "does" and
+// "not" become negation-marking metadata (doSupportIndex,
+// negationIndex, negated: true; subjectBoundary tells parseSentence
+// where the subject span actually ends), never part of the subject or
+// object span. It never fires on an ordinary "does" used as a real
+// main verb ("John does his homework.") because that "does" is not
+// followed by "not".
+const DO_SUPPORT_WORDS = new Set(["do", "does", "did"]);
+
+function findDoSupportNegationPivot(tokens, posResults) {
+  for (let i = 0; i < tokens.length - 2; i += 1) {
+    const doToken = tokens[i];
+    if (doToken.type !== TokenType.WORD || !DO_SUPPORT_WORDS.has(doToken.normalized)) continue;
+    if (!includesTag(posResults[i], POSTag.VERB)) continue;
+
+    const notToken = tokens[i + 1];
+    if (!notToken || notToken.type !== TokenType.WORD || notToken.normalized !== "not") continue;
+    if (!isUnambiguousTag(posResults[i + 1], POSTag.PART)) continue;
+
+    const verbToken = tokens[i + 2];
+    if (!verbToken || verbToken.type !== TokenType.WORD) continue;
+    if (!hasNoEvidence(posResults[i + 2])) continue;
+
+    return {
+      index: i + 2,
+      ambiguous: false,
+      candidateIndexes: [i + 2],
+      reason: null,
+      pivotType: "DO_SUPPORT_NEGATION",
+      negated: true,
+      doSupportIndex: i,
+      negationIndex: i + 1,
+      subjectBoundary: i,
+    };
+  }
+  return null;
+}
+
 function findVerbPivot(tokens, posResults) {
+  const doSupportPivot = findDoSupportNegationPivot(tokens, posResults);
+  if (doSupportPivot) return doSupportPivot;
+
   const candidates = [];
   for (let i = 0; i < tokens.length; i += 1) {
     if (tokens[i].type !== TokenType.WORD) continue;
@@ -289,7 +347,7 @@ function parseSentence(tokens) {
     };
   }
 
-  const subject = resolvePhraseSpan(tokens, 0, pivot.index, nounPhrasesIndexed);
+  const subject = resolvePhraseSpan(tokens, 0, pivot.subjectBoundary ?? pivot.index, nounPhrasesIndexed);
   const object = resolvePhraseSpan(tokens, pivot.index + 1, clauseEnd, nounPhrasesIndexed);
 
   return {
@@ -302,6 +360,7 @@ function parseSentence(tokens) {
         token: tokens[pivot.index],
         candidates: posResults[pivot.index].candidates,
         pivotType: pivot.pivotType || "VERB",
+        negated: pivot.negated === true,
       },
       object,
       ambiguous: false,

@@ -113,6 +113,33 @@ test("Reasoning realm: contradictory premises via explicit polarity — 'John is
   assert.deepEqual(contradictions[0].conflicting_records.sort(), ["know-a", "know-b"]);
 });
 
+test("Reasoning realm (Phase 5, real chain): 'John is in Toronto.' / 'John is not in Toronto.' — predicate AND polarity now come from real parsing, not hand-built records", () => {
+  const { extractKnowledge } = require("../language/realm/knowledgeRealm");
+  const { tokenize } = require("../language/realm/tokenRealm");
+  const extract = (text) => extractKnowledge(text, tokenize(text).tokens).records[0];
+
+  const positive = extract("John is in Toronto.");
+  const negative = extract("John is not in Toronto.");
+  assert.equal(positive.polarity, "POSITIVE");
+  assert.equal(negative.polarity, "NEGATIVE");
+  assert.equal(positive.predicate, negative.predicate);
+
+  // Each independent extraction mints its own entity mention — this
+  // realm never resolves "the John in sentence 1" and "the John in
+  // sentence 2" as the same real-world referent (that is a future
+  // Coreference/Context realm's job, out of scope here). Unifying
+  // subject identity here simulates what that later realm will
+  // eventually hand checkConsistency; everything else (predicate,
+  // polarity) is genuine output of this milestone's own parsing.
+  assert.notEqual(positive.subject.id, negative.subject.id);
+  const unifiedNegative = { ...negative, subject: positive.subject };
+
+  const contradictions = checkConsistency([positive, unifiedNegative]);
+  assert.equal(contradictions.length, 1);
+  assert.equal(contradictions[0].type, "POLARITY_CONTRADICTION");
+  assert.deepEqual(contradictions[0].conflicting_records.sort(), [positive.id, unifiedNegative.id].sort());
+});
+
 test("Reasoning realm: contradiction is never silently resolved — both records remain, neither deleted or flagged as the winner", () => {
   const john = entity("John", "PERSON");
   const toronto = entity("Toronto", "LOCATION");

@@ -32,6 +32,7 @@ test("Benchmark: runBenchmark() reports an honest, non-perfect accuracy — know
   const byId = Object.fromEntries(result.results.map((r) => [r.id, r]));
   assert.equal(byId.copula_sentence_parsing.passed, true);
   assert.equal(byId.telescope_ambiguity.passed, true);
+  assert.equal(byId.negation_real_chain.passed, true);
   assert.equal(byId.birds_fly_deduction_from_nl.passed, false);
 });
 

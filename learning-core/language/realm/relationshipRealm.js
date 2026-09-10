@@ -27,6 +27,17 @@
  * sentence. Two entities co-occurring in a sentence with no valid
  * clause structure connecting them produce NO relationship.
  *
+ * === Polarity (Phase 5): structural, never a truth judgment ===
+ * Every relationship carries `polarity` (POSITIVE by default, NEGATIVE
+ * when a "not" was structurally found — either as Syntax's do-support
+ * negation pivot, or as a leading token inside an object chunk here).
+ * This is exactly the field reasoningRealm.js's checkConsistency already
+ * expected from hand-built records before this realm ever produced it
+ * (see its own module doc's POLARITY_CONTRADICTION example) — detecting
+ * "not" is structural extraction of an explicit textual signal, not
+ * semantic interpretation, and it never touches truth_state/confidence/
+ * probability/uncertainty, which stay exactly what they always were.
+ *
  * === Subject/object resolution: entity mention first, syntactic head second ===
  * A span's argument is resolved by:
  *   1. an Entity Realm mention whose token span matches exactly, else
@@ -87,11 +98,24 @@ const { POSTag, CLOSED_CLASS } = require("./posRealm");
 const { parseSentence } = require("./syntaxRealm");
 const { EntityType, extractEntityMentions } = require("./entityRealm");
 const { newEntityId, newRelationshipId } = require("../../shared/ids");
+const { Polarity } = require("../../shared/constants");
 
 function isUnambiguousPreposition(token) {
   if (!token || token.type !== TokenType.WORD) return false;
   const entry = CLOSED_CLASS[token.normalized];
   return !!entry && entry.length === 1 && entry[0] === POSTag.PREP;
+}
+
+// "not" is the only negation particle this realm recognizes at this
+// phase (contractions like "isn't"/"doesn't" tokenize as a single word
+// today and are a separate, future gap — see tokenRealm.js). Checked
+// against CLOSED_CLASS the same way isUnambiguousPreposition is, rather
+// than hardcoding the string match alone, so this stays derived from
+// POS evidence.
+function isNegationParticle(token) {
+  if (!token || token.type !== TokenType.WORD || token.normalized !== "not") return false;
+  const entry = CLOSED_CLASS[token.normalized];
+  return !!entry && entry.length === 1 && entry[0] === POSTag.PART;
 }
 
 function bareReferent(token, index) {
@@ -137,12 +161,18 @@ function resolveSubjectArgument(subjectPhrase, tokens, entityMentions) {
   return { argument: bareReferent(subjectPhrase.head, headIndex), reason: null };
 }
 
-function buildRelationship(subjectArg, predicate, objectArg, verbToken, preposition) {
+function buildRelationship(subjectArg, predicate, objectArg, verbToken, preposition, negated) {
   return {
     id: newRelationshipId(),
     subject: subjectArg,
     predicate,
     object: objectArg,
+    // Structural polarity only — never a truth judgment. See
+    // reasoningRealm.js's checkConsistency, the first consumer of this
+    // field: two records sharing subject/predicate/object identity but
+    // opposite polarity is how a real contradiction is represented, not
+    // resolved, here.
+    polarity: negated ? Polarity.NEGATIVE : Polarity.POSITIVE,
     source: "SYNTAX_SVO",
     span: {
       start: Math.min(subjectArg.span.start, objectArg.span.start),
@@ -168,7 +198,17 @@ function buildRelationship(subjectArg, predicate, objectArg, verbToken, preposit
 // object chunk. Without this, a determined common-noun object ("the
 // man" in "Dog bites the man.") could never resolve at all: it is
 // neither a single bare token nor (usually) an Entity Realm mention.
-function extractObjectRelationships(objectPhrase, subjectArg, verbToken, tokens, entityMentions, nounPhrases) {
+// `clauseNegated` is true when Syntax's do-support negation pivot
+// already consumed "does"/"not" before this walk ever runs (see
+// syntaxRealm.js's findDoSupportNegationPivot) — every relationship
+// from this clause is then negated regardless of what appears in the
+// object span itself. Independently, a leading "not" found INSIDE a
+// chunk here (the copula case: "is not in Toronto" — "not" is part of
+// the object span, not consumed by Syntax) negates that chunk. Either
+// path sets the same `polarity` field on the built relationship; a
+// clause is never negated twice by both paths at once, since
+// do-support negation's "not" sits before the object span begins.
+function extractObjectRelationships(objectPhrase, subjectArg, verbToken, tokens, entityMentions, nounPhrases, clauseNegated) {
   const relationships = [];
   const unresolved = [];
 
@@ -182,8 +222,14 @@ function extractObjectRelationships(objectPhrase, subjectArg, verbToken, tokens,
   const verbUpper = verbToken.normalized.toUpperCase();
 
   while (pointer < end) {
+    let chunkNegated = clauseNegated === true;
+    if (isNegationParticle(tokens[pointer])) {
+      chunkNegated = true;
+      pointer += 1;
+    }
+
     let preposition = null;
-    if (isUnambiguousPreposition(tokens[pointer])) {
+    if (pointer < end && isUnambiguousPreposition(tokens[pointer])) {
       preposition = tokens[pointer];
       pointer += 1;
     }
@@ -191,7 +237,7 @@ function extractObjectRelationships(objectPhrase, subjectArg, verbToken, tokens,
     if (pointer >= end) {
       unresolved.push({
         span: { tokenStart: pointer - 1, tokenEnd: end },
-        reason: "A leading preposition has no following object; cannot determine a relationship object without guessing.",
+        reason: "A leading negation and/or preposition has no following object; cannot determine a relationship object without guessing.",
       });
       break;
     }
@@ -199,7 +245,7 @@ function extractObjectRelationships(objectPhrase, subjectArg, verbToken, tokens,
     const entityMatch = findEntityMentionAt(entityMentions, pointer);
     if (entityMatch && entityMatch.span.tokenEnd <= end) {
       const predicate = preposition ? `${verbUpper}_${preposition.normalized.toUpperCase()}` : verbUpper;
-      relationships.push(buildRelationship(subjectArg, predicate, entityMatch, verbToken, preposition));
+      relationships.push(buildRelationship(subjectArg, predicate, entityMatch, verbToken, preposition, chunkNegated));
       pointer = entityMatch.span.tokenEnd;
       continue;
     }
@@ -210,7 +256,7 @@ function extractObjectRelationships(objectPhrase, subjectArg, verbToken, tokens,
       const headEntityMatch = findEntityMentionAt(entityMentions, headIndex);
       const argument = headEntityMatch || bareReferent(npMatch.np.head, headIndex);
       const predicate = preposition ? `${verbUpper}_${preposition.normalized.toUpperCase()}` : verbUpper;
-      relationships.push(buildRelationship(subjectArg, predicate, argument, verbToken, preposition));
+      relationships.push(buildRelationship(subjectArg, predicate, argument, verbToken, preposition, chunkNegated));
       pointer = npMatch.end;
       continue;
     }
@@ -219,7 +265,7 @@ function extractObjectRelationships(objectPhrase, subjectArg, verbToken, tokens,
     if (remaining === 1) {
       const referent = bareReferent(tokens[pointer], pointer);
       const predicate = preposition ? `${verbUpper}_${preposition.normalized.toUpperCase()}` : verbUpper;
-      relationships.push(buildRelationship(subjectArg, predicate, referent, verbToken, preposition));
+      relationships.push(buildRelationship(subjectArg, predicate, referent, verbToken, preposition, chunkNegated));
       pointer = end;
       continue;
     }
@@ -278,7 +324,8 @@ function extractRelationships(text, tokens, options = {}) {
     clause.verb.token,
     tokens,
     entityMentions,
-    parsed.nounPhrases
+    parsed.nounPhrases,
+    clause.verb.negated
   );
 
   return {
