@@ -4,6 +4,7 @@
  * Deterministic demonstration of the realm chain built so far:
  *
  *   SYMBOL -> LEXICAL -> TOKEN -> MORPHOLOGY -> POS -> SYNTAX -> ENTITY
+ *   -> RELATIONSHIP
  *
  * Run with: node learning-core/language/demo/run-realm-chain.js
  *
@@ -18,6 +19,7 @@ const { analyzeToken } = require("../realm/morphologyRealm");
 const { classifyToken, tagSentence } = require("../realm/posRealm");
 const { findNounPhrases, parseSentence } = require("../realm/syntaxRealm");
 const { extractEntityMentions, groupMentionsByCandidateIdentity } = require("../realm/entityRealm");
+const { extractRelationships } = require("../realm/relationshipRealm");
 
 function section(title) {
   console.log("\n=== " + title + " ===");
@@ -194,3 +196,36 @@ section("17. Entity Realm: mention vs. identity — repeated mentions are never 
       "that would require coreference/relationship evidence this phase deliberately does not add."
   );
 }
+
+function showRelationships(text, opts) {
+  const { tokens } = tokenize(text);
+  const result = extractRelationships(text, tokens, opts);
+  console.log(`"${text}"`);
+  if (result.relationships.length === 0) {
+    console.log(`  (no relationship) reason: ${result.reason}${result.ambiguous ? " [ambiguous]" : ""}`);
+  }
+  for (const rel of result.relationships) {
+    console.log(
+      `  ${rel.subject.surface} --${rel.predicate}--> ${rel.object.surface}` +
+        `  (subject=${rel.subject.type}, object=${rel.object.type}, verb="${rel.attributes.verb}", prep=${rel.attributes.preposition})`
+    );
+  }
+}
+
+section("18. Relationship Realm: word order determines subject/object, exactly as it did at the Syntax layer");
+showRelationships("Dog bites man.");
+showRelationships("Man bites dog.");
+console.log("Same predicate, swapped roles — a genuinely different relationship, not a relabeling.");
+
+section("19. Relationship Realm: verb + preposition folds into a compound predicate; direction still matters");
+showRelationships("John works at Google.");
+showRelationships("Google works with John.");
+
+section("20. Relationship Realm: one clause, two relationships — the object span is chunked into repeated [PREP, entity] pairs sharing one subject/verb");
+showRelationships("John works at Google in Toronto.");
+
+section("21. Relationship Realm: never manufactured — no verb, ambiguous verb, or an unresolvable multi-token object");
+showRelationships("John and Google.");
+showRelationships("Dogs cats chase.");
+showRelationships("Boy throws red ball.");
+showRelationships("The fastest cat runs.");
