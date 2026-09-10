@@ -35,6 +35,7 @@ const memoryStore = require("../../memory/store");
 const learningPipeline = require("../../learning/candidatePipeline");
 const feedbackLoop = require("../../learning/feedbackLoop");
 const { generateSurfaceText, generateMathExpression } = require("../realm/generationRealm");
+const { TaskType, routeTask } = require("../../model/taskRouter");
 
 function section(title) {
   console.log("\n=== " + title + " ===");
@@ -676,3 +677,23 @@ section("60. Generation Realm: a second output kind (mathematical expressions), 
   console.log(generateMathExpression(math.add(2, 2)).text);
   console.log(generateMathExpression(math.divide(5, 0)).text);
 }
+
+section("61. Model Router: task type decides the backend — deterministic engines for deterministic tasks, LLM only for open-ended generation");
+(async () => {
+  const arithmetic = await routeTask({ taskType: TaskType.ARITHMETIC, args: { operation: "multiply", params: [12, 17] } });
+  console.log(`ARITHMETIC(12 x 17) -> backend=${arithmetic.backend}, result=${arithmetic.result.output}`);
+
+  const text = "John works at Google.";
+  const { tokens } = tokenize(text);
+  const entities = await routeTask({ taskType: TaskType.ENTITY_EXTRACTION, args: { text, tokens } });
+  console.log(`ENTITY_EXTRACTION("${text}") -> backend=${entities.backend}, ${entities.result.length} entities`);
+
+  const openEnded = await routeTask({ taskType: TaskType.OPEN_ENDED_GENERATION, args: { request: { prompt: "hello" } } });
+  console.log(`OPEN_ENDED_GENERATION -> backend=${openEnded.backend}, result=${JSON.stringify(openEnded.result)} (no credential connected in this environment — honest UNKNOWN, not a fabricated reply)`);
+
+  try {
+    await routeTask({ taskType: "MADE_UP_TASK", args: {} });
+  } catch (err) {
+    console.log(`routeTask({taskType: "MADE_UP_TASK"}) -> rejected: "${err.message}"`);
+  }
+})();
