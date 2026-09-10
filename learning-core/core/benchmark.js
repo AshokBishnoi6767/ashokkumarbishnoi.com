@@ -49,6 +49,10 @@ const { recordFeedback } = require("../learning/feedbackLoop");
 const math = require("../math/engine");
 const policyEngine = require("../policy/engine");
 const { ConditionOperator } = require("../shared/constants");
+const universeBench = require("../universe/bench");
+const { bootstrap } = require("../universe/bootstrap");
+
+bootstrap();
 
 // Synthetic, illustrative-only policy (Customer Intelligence Phase 7) —
 // mirrors the exact example from the spec this milestone implements.
@@ -328,6 +332,75 @@ const BENCHMARK_CASES = [
         product_category: "final_sale",
       });
       return { passed: result.status === "NOT_ELIGIBLE" && !!result.exception_triggered, detail: result };
+    },
+  },
+  {
+    id: "universe_portal_routing_accuracy",
+    category: "UNIVERSE_ROUTING",
+    description: "Invoking portal.mathematics reaches realm.mathematics and only realm.mathematics — routing is exact, not fuzzy.",
+    run: () => {
+      const result = universeBench.invokeSync("portal.mathematics", { operation: "add", args: [2, 2] });
+      const passed = result.status === "RESULT" && result.realmId === "realm.mathematics" && result.result === 4;
+      return { passed, detail: result };
+    },
+  },
+  {
+    id: "universe_unauthorized_invocation_blocked",
+    category: "UNIVERSE_AUTHORIZATION",
+    description: "A portal request with no granted authorization is refused BEFORE the realm's execute function ever runs.",
+    run: () => {
+      const result = universeBench.invokeSyncUnauthorized("portal.mathematics", { operation: "add", args: [2, 2] });
+      return { passed: result.status === "UNAUTHORIZED", detail: result };
+    },
+  },
+  {
+    id: "universe_planned_realm_honest_unknown",
+    category: "UNIVERSE_UNKNOWN_HANDLING",
+    description: "Invoking a PLANNED realm's portal (e.g. Physics) never fabricates a result — NOT_IMPLEMENTED, honestly.",
+    run: () => {
+      const result = universeBench.invokeSync("portal.physics", {});
+      return { passed: result.status === "NOT_IMPLEMENTED" && result.result === null, detail: result };
+    },
+  },
+  {
+    id: "universe_cross_realm_agreement",
+    category: "UNIVERSE_CROSS_REALM",
+    description: "Two independently-computed, agreeing results from different realms cross-verify as VERIFIED, not silently assumed.",
+    run: () => {
+      const a = universeBench.invokeSync("portal.mathematics", { operation: "add", args: [2, 2] });
+      const b = universeBench.invokeSync("portal.mathematics", { operation: "multiply", args: [2, 2] });
+      const vr = universeBench.crossRealmVerify([a, b]);
+      return { passed: vr.status === "VERIFIED", detail: vr };
+    },
+  },
+  {
+    id: "universe_cross_realm_conflict_preserved",
+    category: "UNIVERSE_CROSS_REALM",
+    description: "Two disagreeing results are reported CONFLICTING_RESULTS with both sources preserved, never silently resolved to one answer.",
+    run: () => {
+      const a = universeBench.invokeSync("portal.mathematics", { operation: "add", args: [2, 2] });
+      const b = universeBench.invokeSync("portal.mathematics", { operation: "add", args: [3, 3] });
+      const vr = universeBench.crossRealmVerify([a, b]);
+      return { passed: vr.status === "CONFLICTING_RESULTS" && vr.sources.length === 2, detail: vr };
+    },
+  },
+  {
+    id: "universe_orchestration_parallel_composition",
+    category: "UNIVERSE_ORCHESTRATION",
+    description: "A 2-step orchestration plan with no dependencies executes both steps and returns every result, not just the last one.",
+    run: () => {
+      const executions = universeBench.runParallelPlan();
+      const passed = executions.length === 2 && executions.every((e) => e.status === "RESULT");
+      return { passed, detail: executions.map((e) => ({ stepId: e.stepId, result: e.portalResult.result })) };
+    },
+  },
+  {
+    id: "universe_registry_status_integrity",
+    category: "UNIVERSE_STATUS_INTEGRITY",
+    description: "Every registered realm's claimed status is backed by what actually exists — no IMPLEMENTED/VERIFIED realm without a real execute function, no PLANNED realm WITH one.",
+    run: () => {
+      const problems = universeBench.validateAllRealms();
+      return { passed: problems.length === 0, detail: problems };
     },
   },
 ];

@@ -120,6 +120,11 @@ const VerificationOutcome = Object.freeze({
   CONTRADICTED: "CONTRADICTED",
   UNKNOWN: "UNKNOWN",
   NOT_VERIFIABLE: "NOT_VERIFIABLE",
+  // Added for cross-realm verification (Trinity Universe): distinct
+  // from CONTRADICTED (one claim vs. its own evidence) — two DIFFERENT
+  // realms produced results that disagree with each other. Neither
+  // realm's result is discarded; see universe/crossRealm.js.
+  CONFLICTING_RESULTS: "CONFLICTING_RESULTS",
 });
 
 // Hypothesis Realm's own status vocabulary. A hypothesis is never
@@ -194,6 +199,25 @@ const ConditionOperator = Object.freeze({
   NOT_IN: "NOT_IN",
 });
 
+// Trinity Universe (Realm/Portal Registry) status vocabularies. A
+// realm's status is a claim about how much real, tested intelligence
+// backs it — PLANNED/SCAFFOLDED entries have a contract and metadata
+// only, never a fabricated capability. See universe/domain.js.
+const RealmStatus = Object.freeze({
+  PLANNED: "PLANNED",
+  SCAFFOLDED: "SCAFFOLDED",
+  EXPERIMENTAL: "EXPERIMENTAL",
+  IMPLEMENTED: "IMPLEMENTED",
+  VERIFIED: "VERIFIED",
+  PRODUCTION_READY: "PRODUCTION_READY",
+});
+
+const PortalStatus = Object.freeze({
+  PLANNED: "PLANNED",
+  ACTIVE: "ACTIVE",
+  DISABLED: "DISABLED",
+});
+
 const Modality = Object.freeze({
   TEXT: "TEXT",
   IMAGE: "IMAGE",
@@ -246,6 +270,8 @@ module.exports = {
   Polarity,
   EligibilityStatus,
   ConditionOperator,
+  RealmStatus,
+  PortalStatus,
   Modality,
   ProcessingStatus,
   MemoryClass,

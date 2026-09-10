@@ -778,4 +778,45 @@ section("64. Customer Intelligence: Policy Engine (Phase 7/8) — synthetic refu
   } catch (err) {
     console.log(`routeTask({taskType: "MADE_UP_TASK"}) -> rejected: "${err.message}"`);
   }
+
+  section("65. Trinity Universe: Realm/Portal Registry, real invocation, honest PLANNED/NOT_IMPLEMENTED, cross-realm verification, and orchestration");
+
+  const { bootstrap } = require("../../universe/bootstrap");
+  const { realmRegistry, portalRegistry, commandCenterRegistry, findRealmsByStatus } = require("../../universe/registry");
+  const { createAuthorization, createPortalRequest, createOrchestrationPlan } = require("../../universe/protocol");
+  const { invokePortal } = require("../../universe/portalInvoke");
+  const { executePlan } = require("../../universe/orchestrator");
+  const { crossRealmVerify } = require("../../universe/crossRealm");
+
+  bootstrap();
+  console.log(
+    `Registry: ${realmRegistry.count()} realms, ${portalRegistry.count()} portals, ${commandCenterRegistry.count()} command centers ` +
+      `(${findRealmsByStatus("IMPLEMENTED").length + findRealmsByStatus("VERIFIED").length} real/executable, ${findRealmsByStatus("PLANNED").length} honestly PLANNED).`
+  );
+
+  const auth = createAuthorization({ granted: true, level: "EXECUTE" });
+
+  const mathResult = await invokePortal(createPortalRequest({ portalId: "portal.mathematics", request: { operation: "multiply", args: [12, 17] }, authorization: auth }));
+  console.log(`portal.mathematics(12*17) -> status=${mathResult.status} result=${mathResult.result} (realm=${mathResult.realmId})`);
+
+  const unauth = await invokePortal(createPortalRequest({ portalId: "portal.mathematics", request: { operation: "add", args: [1, 1] } }));
+  console.log(`portal.mathematics with NO authorization -> status=${unauth.status} (refused before execution, never a fabricated result)`);
+
+  const plannedResult = await invokePortal(createPortalRequest({ portalId: "portal.physics", request: {}, authorization: auth }));
+  console.log(`portal.physics (status=PLANNED) -> status=${plannedResult.status} (honest, not a guessed answer for a realm that doesn't exist yet)`);
+
+  const a = await invokePortal(createPortalRequest({ portalId: "portal.mathematics", request: { operation: "add", args: [2, 2] }, authorization: auth }));
+  const b = await invokePortal(createPortalRequest({ portalId: "portal.mathematics", request: { operation: "add", args: [3, 3] }, authorization: auth }));
+  const conflict = crossRealmVerify([a, b]);
+  console.log(`crossRealmVerify(add(2,2)=${a.result}, add(3,3)=${b.result}) -> ${conflict.status} (both sources preserved, neither discarded)`);
+
+  const plan = createOrchestrationPlan({
+    task: "compute two independent sums",
+    steps: [
+      { stepId: "s1", portalId: "portal.mathematics", payload: { operation: "add", args: [10, 5] } },
+      { stepId: "s2", portalId: "portal.mathematics", payload: { operation: "multiply", args: [6, 7] } },
+    ],
+  });
+  const { executions } = await executePlan(plan, { authorization: auth });
+  console.log(`Orchestration plan "${plan.task}": ` + executions.map((e) => `${e.stepId}=${e.portalResult.result}`).join(", "));
 })();

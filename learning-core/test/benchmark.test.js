@@ -47,6 +47,15 @@ test("Benchmark: POLICY_REASONING cases all pass — eligible, UNKNOWN, and exce
   assert.equal(result.by_category.POLICY_REASONING.total, 3);
 });
 
+test("Benchmark: every UNIVERSE_* category case passes — portal routing, authorization, UNKNOWN handling, cross-realm verification, orchestration, and status integrity are all real, not aspirational", () => {
+  const result = runBenchmark();
+  const universeCategories = Object.keys(result.by_category).filter((c) => c.startsWith("UNIVERSE_"));
+  assert.ok(universeCategories.length >= 5, "expected at least 5 UNIVERSE_* categories");
+  for (const category of universeCategories) {
+    assert.equal(result.by_category[category].passed, result.by_category[category].total, `category ${category} should be 100% passing`);
+  }
+});
+
 test("Benchmark: the deduction MECHANISM passes even though NL parsing of the classic syllogism does not — these are different capabilities", () => {
   const result = runBenchmark();
   const byId = Object.fromEntries(result.results.map((r) => [r.id, r]));
