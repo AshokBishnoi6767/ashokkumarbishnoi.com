@@ -10,6 +10,7 @@ const rateLimiter = require("../learning-core/integration/security/rateLimiter")
 const securityLog = require("../learning-core/integration/audit/securityLog");
 const logger = require("../learning-core/shared/logger");
 const conversationStore = require("../learning-core/persistence/store");
+const fileStore = require("../learning-core/persistence/fileStore");
 
 let baseUrl;
 
@@ -147,6 +148,61 @@ test("SECURITY: a prompt-injection attempt against the public agent never return
   const serialized = JSON.stringify(body);
   assert.doesNotMatch(serialized, /ANTHROPIC_API_KEY/);
   assert.doesNotMatch(serialized, /approval|memory_class|audit/i);
+});
+
+test("SECURITY: an expired token is rejected exactly like a forged one — a valid past identity is not a permanent grant", async () => {
+  const setupRes = await post("/api/auth/setup-owner", { email: "owner2@example.com", password: "correct horse battery staple" });
+  assert.equal(setupRes.status, 200);
+  const uid = fakeAdminAuth.getUidForEmail("owner2@example.com");
+  const expiredToken = fakeAdminAuth.issueExpiredTokenForUid(uid);
+
+  const res = await fetch(baseUrl + "/api/auth/me", { headers: { Authorization: "Bearer " + expiredToken } });
+  assert.equal(res.status, 401);
+  const body = await res.json();
+  assert.equal(body.status, "UNAUTHORIZED");
+
+  const events = securityLog.listSecurityEvents();
+  assert.ok(events.some((e) => e.event === "owner_auth_failed" && /expired/i.test(e.reason)));
+});
+
+test("SECURITY: a request body claiming administrator/owner authority in extra fields (role, isOwner, uid) has zero effect — authorization is derived only from the verified token, never from JSON body content", async () => {
+  const ownerToken = await setUpOwner();
+  const res = await post(
+    "/api/ai",
+    {
+      message: "hello",
+      role: "admin",
+      isOwner: true,
+      uid: "some-other-uid-entirely",
+      administrator: true,
+    },
+    { Authorization: "Bearer " + ownerToken }
+  );
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  // A 200 with the normal structured status proves the extra claimed-
+  // authority fields were simply never read by authorizeOwnerRequest or
+  // the /api/ai handler (both only ever read message/sessionId/timezone/
+  // confirmed/testScenario/attachments off the body) — not that they were
+  // "denied" (there's nothing here to deny; they're not a recognized input).
+  assert.ok(body.status);
+  assert.equal(Object.prototype.hasOwnProperty.call(body, "role"), false);
+  assert.equal(Object.prototype.hasOwnProperty.call(body, "isOwner"), false);
+});
+
+test("SECURITY: a security-log write failure degrades to a generic server error, never a crash or a leaked stack trace", async () => {
+  const originalSave = fileStore.save;
+  fileStore.save = () => {
+    throw new Error("simulated disk failure: ENOSPC");
+  };
+  try {
+    const res = await post("/api/ai", { message: "hi" }, { Authorization: "Bearer forged-token-to-trigger-a-logged-failure" });
+    assert.equal(res.status, 500);
+    const body = await res.json();
+    assert.deepEqual(body, { status: "SERVER_ERROR" }); // never the raw "ENOSPC" message or a stack trace
+  } finally {
+    fileStore.save = originalSave;
+  }
 });
 
 test("SECURITY: reusing a private session_id against the public endpoint fails closed (500, generic) rather than merging or leaking the private conversation", async () => {

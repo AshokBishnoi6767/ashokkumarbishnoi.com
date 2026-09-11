@@ -16,6 +16,7 @@
 // tokens, not just this double.
 let users = new Map(); // uid -> { uid, email }
 let tokens = new Map(); // token -> uid
+let expiredTokens = new Set(); // token strings that must verify as expired, not just unknown
 let counter = 0;
 
 async function createUser({ email, password }) {
@@ -34,6 +35,12 @@ async function createUser({ email, password }) {
 }
 
 async function verifyIdToken(token) {
+  if (expiredTokens.has(token)) {
+    // Mirrors the real Admin SDK's distinct "auth/id-token-expired" failure
+    // for a token that WAS validly issued but has since expired — a
+    // different failure mode than "never issued at all" (forged).
+    throw new Error("Firebase ID token has expired.");
+  }
   const uid = tokens.get(token);
   if (!uid) {
     throw new Error("Invalid or forged token.");
@@ -60,6 +67,14 @@ function issueTokenForEmail(email) {
   return issueTokenForUid(user.uid);
 }
 
+// Test-only: mint a token that verifies as EXPIRED, not merely unknown —
+// distinct failure mode from a forged/never-issued token.
+function issueExpiredTokenForUid(uid) {
+  const token = issueTokenForUid(uid);
+  expiredTokens.add(token);
+  return token;
+}
+
 function getUidForEmail(email) {
   const user = Array.from(users.values()).find((u) => u.email === email);
   return user ? user.uid : null;
@@ -78,6 +93,7 @@ function registerUser(uid, email) {
 function reset() {
   users = new Map();
   tokens = new Map();
+  expiredTokens = new Set();
 }
 
-module.exports = { createUser, verifyIdToken, issueTokenForUid, issueTokenForEmail, getUidForEmail, registerUser, reset };
+module.exports = { createUser, verifyIdToken, issueTokenForUid, issueTokenForEmail, issueExpiredTokenForUid, getUidForEmail, registerUser, reset };

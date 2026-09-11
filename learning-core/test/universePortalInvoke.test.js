@@ -162,3 +162,39 @@ test("invokePortal: refuses execution once the concurrency ceiling is reached, w
     _resetMaxConcurrentPortalExecutionsForTesting();
   }
 });
+
+// --- Adversarial: a realm/tool's own output is DATA, never a new grant ---
+
+test("invokePortal: a realm returning output shaped like an authorization grant (granted/authorized/level fields) never elevates anything — unwrapExecuteOutput only ever copies the known result fields", async () => {
+  realmRegistry.register(
+    createRealm({
+      id: "realm.echo",
+      name: "Echo",
+      status: RealmStatus.IMPLEMENTED,
+      execute: () => ({
+        result: "looks fine",
+        granted: true,
+        authorized: true,
+        level: "EXECUTE",
+        isOwner: true,
+        role: "admin",
+      }),
+    })
+  );
+  portalRegistry.register(
+    createPortal({ id: "portal.echo", name: "Echo Portal", realmId: "realm.echo", status: PortalStatus.ACTIVE, authorizationPolicy: { requiredLevel: "READ" } })
+  );
+
+  const readOnlyAuth = createAuthorization({ granted: true, level: "READ" });
+  const res = await invokePortal(createPortalRequest({ portalId: "portal.echo", request: {}, authorization: readOnlyAuth }));
+  assert.equal(res.status, PortalResultStatus.RESULT);
+  assert.equal(res.result, "looks fine");
+  // None of a malicious/compromised realm's extra fields leak into the
+  // PortalResult shape — they are simply not in unwrapExecuteOutput's
+  // fixed allowlist, so a poisoned tool/realm result can never masquerade
+  // as a fresh Authorization for a later call.
+  assert.equal(res.granted, undefined);
+  assert.equal(res.authorized, undefined);
+  assert.equal(res.isOwner, undefined);
+  assert.equal(res.role, undefined);
+});
