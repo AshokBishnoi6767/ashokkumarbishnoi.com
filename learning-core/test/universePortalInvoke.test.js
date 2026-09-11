@@ -3,7 +3,11 @@
 const { test, beforeEach } = require("node:test");
 const assert = require("node:assert/strict");
 
-const { invokePortal } = require("../universe/portalInvoke");
+const {
+  invokePortal,
+  _setMaxConcurrentPortalExecutionsForTesting,
+  _resetMaxConcurrentPortalExecutionsForTesting,
+} = require("../universe/portalInvoke");
 const { realmRegistry, portalRegistry } = require("../universe/registry");
 const { createRealm, createPortal } = require("../universe/domain");
 const { createAuthorization, createPortalRequest, PortalResultStatus } = require("../universe/protocol");
@@ -107,4 +111,54 @@ test("invokePortal: result carries realm/portal identity, never ambiguous about 
   const res = await invokePortal(createPortalRequest({ portalId: "portal.echo", request: {}, authorization: grantedAuth }));
   assert.equal(res.realmId, "realm.echo");
   assert.equal(res.portalId, "portal.echo");
+});
+
+// --- Security Hardening v0.1: default-deny authorization level ---
+
+test("invokePortal: a portal declaring NO authorizationPolicy at all now defaults to requiring EXECUTE, not 'any granted authorization will do'", async () => {
+  registerEchoRealmAndPortal({ execute: () => 1 }); // no authorizationPolicy set
+
+  const readOnlyAuth = createAuthorization({ granted: true, level: "READ" });
+  const res = await invokePortal(createPortalRequest({ portalId: "portal.echo", request: {}, authorization: readOnlyAuth }));
+  assert.equal(res.status, PortalResultStatus.UNAUTHORIZED);
+
+  const executeAuth = createAuthorization({ granted: true, level: "EXECUTE" });
+  const res2 = await invokePortal(createPortalRequest({ portalId: "portal.echo", request: {}, authorization: executeAuth }));
+  assert.equal(res2.status, PortalResultStatus.RESULT);
+});
+
+test("invokePortal: authorization level is ordinal, not exact-match — EXECUTE satisfies a portal requiring only READ", async () => {
+  realmRegistry.register(createRealm({ id: "realm.echo", name: "Echo", status: RealmStatus.IMPLEMENTED, execute: () => 1 }));
+  portalRegistry.register(createPortal({ id: "portal.echo", name: "Echo", realmId: "realm.echo", status: PortalStatus.ACTIVE, authorizationPolicy: { requiredLevel: "READ" } }));
+
+  const readOnlyAuth = createAuthorization({ granted: true, level: "READ" });
+  const res = await invokePortal(createPortalRequest({ portalId: "portal.echo", request: {}, authorization: readOnlyAuth }));
+  assert.equal(res.status, PortalResultStatus.RESULT);
+});
+
+// --- Security Hardening v0.1: concurrent-execution resource limit ---
+
+test("invokePortal: refuses execution once the concurrency ceiling is reached, without ever calling execute()", async () => {
+  let resolveFirst;
+  const gate = new Promise((resolve) => { resolveFirst = resolve; });
+  let callCount = 0;
+  registerEchoRealmAndPortal({ execute: async () => { callCount++; await gate; return 1; } });
+
+  _setMaxConcurrentPortalExecutionsForTesting(1);
+  try {
+    const firstCall = invokePortal(createPortalRequest({ portalId: "portal.echo", request: {}, authorization: grantedAuth }));
+    // Give the first call's execute() a tick to actually start before the second fires.
+    await new Promise((r) => setImmediate(r));
+
+    const secondResult = await invokePortal(createPortalRequest({ portalId: "portal.echo", request: {}, authorization: grantedAuth }));
+    assert.equal(secondResult.status, PortalResultStatus.ERROR);
+    assert.match(secondResult.reason, /already in flight/);
+    assert.equal(callCount, 1);
+
+    resolveFirst();
+    const firstResult = await firstCall;
+    assert.equal(firstResult.status, PortalResultStatus.RESULT);
+  } finally {
+    _resetMaxConcurrentPortalExecutionsForTesting();
+  }
 });

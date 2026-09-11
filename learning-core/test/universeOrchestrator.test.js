@@ -80,3 +80,14 @@ test("executePlan: unauthorized invocation propagates per-step (UNAUTHORIZED), n
   const { executions } = await executePlan(plan, {});
   assert.equal(executions[0].status, PortalResultStatus.UNAUTHORIZED);
 });
+
+// --- Security Hardening v0.1: plan-size resource limit ---
+
+test("executePlan: a plan exceeding the step-count ceiling is refused entirely, before any step runs", async () => {
+  const steps = Array.from({ length: 201 }, (_, i) => ({ stepId: `s${i}`, portalId: "portal.double", payload: { x: i } }));
+  const plan = createOrchestrationPlan({ task: "too big", steps });
+  const { executions, refused } = await executePlan(plan, { authorization: auth });
+  assert.ok(refused);
+  assert.equal(executions.length, 201);
+  assert.ok(executions.every((e) => e.status === PortalResultStatus.ERROR));
+});

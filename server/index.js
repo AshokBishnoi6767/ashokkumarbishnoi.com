@@ -18,6 +18,8 @@ const { integrationHealth } = require("../learning-core/integration/health");
 const { listProviders } = require("../learning-core/model/registry");
 const logger = require("../learning-core/shared/logger");
 const { listAudit } = require("../learning-core/integration/audit/log");
+const { recordSecurityEvent, listSecurityEvents } = require("../learning-core/integration/audit/securityLog");
+const { checkLimit } = require("../learning-core/integration/security/rateLimiter");
 const { listPendingApprovals, listAllApprovals } = require("../learning-core/integration/approvals/store");
 const { approveAction, rejectAction } = require("../learning-core/integration/actions/lifecycle");
 const memoryStore = require("../learning-core/memory/store");
@@ -68,17 +70,36 @@ function matchLegacyRedirect(pathname) {
 // the browser (user_id, email, role) is ever trusted — identity comes
 // exclusively from firebaseAdmin.verifyIdToken(), which itself calls the
 // real Firebase Admin SDK (or the Auth emulator in dev/test).
+// Resolves the caller's IP for rate limiting and security-event logging
+// only — never used as an identity or authorization signal. Reads
+// directly off the socket; this process is not deployed behind a
+// reverse proxy today (see functions-entry.js's own boundary notes), so
+// there is no trusted proxy whose X-Forwarded-For would be safe to
+// prefer over it — a client-supplied header is trivially spoofable.
+function clientIp(req) {
+  return req.socket && req.socket.remoteAddress ? req.socket.remoteAddress : "unknown";
+}
+
 async function authorizeOwnerRequest(req) {
   const header = req.headers["authorization"] || "";
   if (!header.startsWith("Bearer ")) {
+    // Not a security event: this is the ordinary "not signed in yet"
+    // state every anonymous page load hits (e.g. the dashboard's own
+    // auth-state check) — logging it would drown real signal in noise.
     return { authorized: false, reason: "Missing bearer token." };
   }
   const idToken = header.slice("Bearer ".length);
   const verification = await firebaseAdmin.verifyIdToken(idToken);
   if (!verification.ok) {
+    // A token that failed real verification (forged, expired, malformed)
+    // IS a meaningful signal, unlike simply having none.
+    recordSecurityEvent({ event: "owner_auth_failed", reason: verification.reason, path: req.url, ip: clientIp(req) });
     return { authorized: false, reason: verification.reason };
   }
   if (!ownerAccount.isOwner(verification.uid)) {
+    // A genuinely authenticated Firebase user who is NOT the owner
+    // reaching a private route is the most meaningful signal of all.
+    recordSecurityEvent({ event: "owner_auth_failed", reason: "Authenticated user is not the configured owner.", path: req.url, ip: clientIp(req), uid: verification.uid });
     return { authorized: false, reason: "Authenticated user is not the configured owner." };
   }
   return { authorized: true, uid: verification.uid, email: verification.email, userScope: "private:" + verification.uid };
@@ -100,16 +121,26 @@ function readJsonBody(req) {
   return new Promise((resolve, reject) => {
     let data = "";
     let size = 0;
+    let tooLarge = false;
     req.on("data", (chunk) => {
+      if (tooLarge) return; // already rejected — drain without buffering further, don't destroy the socket
       size += chunk.length;
       if (size > 1e6) {
+        // req.destroy() here would kill the underlying socket before the
+        // caller can write a clean 400 response (a real bug this exact
+        // scenario surfaced: the client saw ECONNRESET, not INVALID_REQUEST).
+        // Rejecting without destroying keeps the connection alive for the
+        // response, while discarding (not buffering) further chunks still
+        // bounds memory the same as before.
+        tooLarge = true;
+        data = "";
         reject(new Error("Request body too large."));
-        req.destroy();
         return;
       }
       data += chunk;
     });
     req.on("end", () => {
+      if (tooLarge) return; // already settled
       if (!data) return resolve({});
       try {
         resolve(JSON.parse(data));
@@ -165,9 +196,42 @@ function serveStatic(rootDir, urlPath, res) {
 // (see functions-entry.js) — same handler, same behavior, whichever
 // runtime is fronting it. Nothing about the Control Layer / auth / audit
 // path changes between local dev and that production runtime.
+// Baseline response hardening headers — non-breaking defaults (no CSP:
+// the site loads no third-party scripts/styles today except the Firebase
+// SDK as an ES module from gstatic.com in the sign-in/dashboard pages,
+// and a CSP tight enough to matter needs a page-by-page connect-src/
+// script-src audit this milestone did not do; adding a wrong CSP would
+// silently break sign-in, which is worse than the current gap).
+function applySecurityHeaders(res) {
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  res.setHeader("X-Frame-Options", "DENY");
+  res.setHeader("Referrer-Policy", "strict-origin-when-cross-origin");
+  res.setHeader("Permissions-Policy", "geolocation=(), microphone=(), camera=()");
+}
+
+// Rate limits are keyed by IP for anonymous/pre-auth surfaces (the only
+// identity available before a token is verified) and by uid for the
+// authenticated private endpoint — a compromised or leaked owner token
+// still gets bounded, not unlimited, request volume.
+const PUBLIC_AI_LIMIT = { max: 30, windowMs: 60_000 };
+const SETUP_OWNER_LIMIT = { max: 5, windowMs: 60_000 };
+const PRIVATE_AI_LIMIT = { max: 60, windowMs: 60_000 };
+
+function rateLimited(res, correlationId, key, limitConfig, event) {
+  const { allowed, retryAfterMs } = checkLimit(key, limitConfig);
+  if (!allowed) {
+    recordSecurityEvent({ event, key, correlationId });
+    res.setHeader("Retry-After", Math.ceil(retryAfterMs / 1000));
+    sendJson(res, 429, { status: "RATE_LIMITED", reason: "Too many requests; please slow down." });
+    return true;
+  }
+  return false;
+}
+
 async function requestHandler(req, res) {
   const correlationId = randomUUID();
   const url = req.url || "/";
+  applySecurityHeaders(res);
 
   try {
     // SEO: pre-redesign URL redirects, checked before any other routing —
@@ -190,6 +254,7 @@ async function requestHandler(req, res) {
     // ownerAccount.setupOwner() to close the race window. After the first
     // successful call, this endpoint always refuses.
     if (req.method === "POST" && url === "/api/auth/setup-owner") {
+      if (rateLimited(res, correlationId, clientIp(req), SETUP_OWNER_LIMIT, "setup_owner_rate_limited")) return;
       if (ownerAccount.isOwnerConfigured()) {
         return sendJson(res, 409, { status: "OWNER_ALREADY_CONFIGURED", reason: "Owner setup has already been completed." });
       }
@@ -226,6 +291,7 @@ async function requestHandler(req, res) {
         logger.warn("private_ai_unauthorized", { correlationId, reason: auth.reason });
         return sendJson(res, 401, { status: "UNAUTHORIZED", reason: auth.reason });
       }
+      if (rateLimited(res, correlationId, auth.uid, PRIVATE_AI_LIMIT, "private_ai_rate_limited")) return;
       const body = await readJsonBody(req).catch((err) => ({ __error: err.message }));
       if (body.__error || typeof body.message !== "string") {
         return sendJson(res, 400, { status: "INVALID_REQUEST", reason: body.__error || "message (string) is required." });
@@ -246,6 +312,7 @@ async function requestHandler(req, res) {
     }
 
     if (req.method === "POST" && url === "/api/public-ai") {
+      if (rateLimited(res, correlationId, clientIp(req), PUBLIC_AI_LIMIT, "public_ai_rate_limited")) return;
       const body = await readJsonBody(req).catch((err) => ({ __error: err.message }));
       if (body.__error || typeof body.message !== "string") {
         return sendJson(res, 400, { status: "INVALID_REQUEST", reason: body.__error || "message (string) is required." });
@@ -268,6 +335,16 @@ async function requestHandler(req, res) {
       if (!auth.authorized) return sendJson(res, 401, { status: "UNAUTHORIZED", reason: auth.reason });
       const entries = listAudit().slice(-200).reverse();
       return sendJson(res, 200, { audit: entries });
+    }
+
+    // Security events (auth failures, rate-limit trips, Universe
+    // authorization denials) — a distinct collection from /api/audit's
+    // action-lifecycle outcomes; same owner-only boundary.
+    if (req.method === "GET" && url === "/api/security-events") {
+      const auth = await authorizeOwnerRequest(req);
+      if (!auth.authorized) return sendJson(res, 401, { status: "UNAUTHORIZED", reason: auth.reason });
+      const events = listSecurityEvents().slice(-200).reverse();
+      return sendJson(res, 200, { security_events: events });
     }
 
     if (req.method === "GET" && url === "/api/approvals") {

@@ -11,6 +11,8 @@ const { getConversation } = require("../learning-core/persistence/store");
 const firebaseAdmin = require("../learning-core/integration/auth/firebaseAdmin");
 const ownerAccount = require("../learning-core/integration/auth/ownerAccount");
 const fakeAdminAuth = require("./fakeAdminAuth");
+const rateLimiter = require("../learning-core/integration/security/rateLimiter");
+const securityLog = require("../learning-core/integration/audit/securityLog");
 
 let baseUrl;
 let ownerToken;
@@ -41,6 +43,13 @@ after(async () => {
 beforeEach(async () => {
   ownerAccount._reset();
   fakeAdminAuth.reset();
+  // Every test's setup-owner call in this hook shares one client IP
+  // (loopback) — without resetting the rate limiter's window per test,
+  // the real per-IP setup-owner limit would start rejecting this hook
+  // itself partway through the suite, unrelated to what any individual
+  // test is exercising.
+  rateLimiter._reset();
+  securityLog._reset();
   ownerEmail = `owner-${Date.now()}-${Math.random().toString(36).slice(2)}@example.com`;
   const setupRes = await post("/api/auth/setup-owner", { email: ownerEmail, password: "correct horse battery staple" });
   const setupBody = await setupRes.json();

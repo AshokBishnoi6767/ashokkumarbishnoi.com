@@ -25,6 +25,12 @@ const { createPortalRequest, createRealmExecution, PortalResultStatus } = requir
 const { invokePortal } = require("./portalInvoke");
 const { portalRegistry } = require("./registry");
 
+// Resource-limit guard (Security Hardening v0.1, Phase 11: "orchestration
+// depth"): a plan this large is refused outright, before any step runs —
+// distinct from the cycle-detection below, which only catches steps that
+// can never become ready, not a plan that is simply too big to run safely.
+const MAX_PLAN_STEPS = 200;
+
 async function runStep(plan, step, { authorization, context }) {
   const portal = portalRegistry.get(step.portalId);
   const realmId = portal ? portal.realmId : "unresolved";
@@ -42,6 +48,21 @@ async function runStep(plan, step, { authorization, context }) {
 }
 
 async function executePlan(plan, { authorization, context = null } = {}) {
+  if (plan.steps.length > MAX_PLAN_STEPS) {
+    const executions = plan.steps.map((s) =>
+      createRealmExecution({
+        planId: plan.id,
+        stepId: s.stepId,
+        portalId: s.portalId,
+        realmId: "unresolved",
+        status: PortalResultStatus.ERROR,
+        input: s.payload,
+        portalResult: null,
+      })
+    );
+    return { plan, executions, refused: `Plan has ${plan.steps.length} steps, exceeding the ${MAX_PLAN_STEPS}-step limit; refused before executing any of them.` };
+  }
+
   const stepById = new Map(plan.steps.map((s) => [s.stepId, s]));
   const completed = new Map();
   const pending = new Set(plan.steps.map((s) => s.stepId));
