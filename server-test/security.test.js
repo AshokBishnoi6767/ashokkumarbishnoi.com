@@ -80,6 +80,33 @@ test("SECURITY: repeated setup-owner attempts beyond the rate limit get 429, not
   assert.equal(sawRateLimited, true);
 });
 
+test("SECURITY: excessive requests to the authenticated private-AI endpoint are rate-limited per uid, not just the anonymous surfaces", async () => {
+  const ownerToken = await setUpOwner();
+  let sawRateLimited = false;
+  for (let i = 0; i < 61; i++) {
+    // PRIVATE_AI_LIMIT is 60/60s per uid.
+    const res = await post("/api/ai", { message: "hello " + i }, { Authorization: "Bearer " + ownerToken });
+    if (res.status === 429) sawRateLimited = true;
+  }
+  assert.equal(sawRateLimited, true);
+});
+
+test("SECURITY: concurrent setup-owner attempts never create two owners — exactly one wins, the rest see OWNER_ALREADY_CONFIGURED", async () => {
+  const attempts = await Promise.all(
+    Array.from({ length: 5 }, (_, i) => post("/api/auth/setup-owner", { email: `race${i}@example.com`, password: "correct horse battery staple" }))
+  );
+  const statuses = await Promise.all(attempts.map((r) => r.json()));
+  const created = statuses.filter((s) => s.status === "OWNER_CREATED");
+  const alreadyConfigured = statuses.filter((s) => s.status === "OWNER_ALREADY_CONFIGURED");
+  assert.equal(created.length, 1, "exactly one concurrent setup-owner attempt must win");
+  assert.equal(alreadyConfigured.length, 4);
+
+  // Confirm only one real owner record persisted, not a last-write-wins
+  // overwrite by whichever call happened to save() last.
+  const meRes = await fetch(baseUrl + "/api/auth/me", { headers: { Authorization: "Bearer " + fakeAdminAuth.issueTokenForEmail(created[0].email) } });
+  assert.equal(meRes.status, 200);
+});
+
 test("SECURITY: oversized request body is refused as 400, never buffered without limit or crashed", async () => {
   const hugeMessage = "a".repeat(2_000_000); // over the 1MB cap enforced in readJsonBody
   const res = await post("/api/public-ai", { message: hugeMessage });
