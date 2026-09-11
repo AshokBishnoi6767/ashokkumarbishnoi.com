@@ -163,6 +163,76 @@ test("invokePortal: refuses execution once the concurrency ceiling is reached, w
   }
 });
 
+// --- Adversarial: genuine recursive realm invocation (not just parallel
+// fan-out) must also hit the resource-exhaustion ceiling, never recurse
+// unboundedly or crash the process ---
+
+test("invokePortal: a realm whose execute() recursively re-invokes the same portal is refused once the concurrency ceiling is hit — recursion is bounded, not unbounded", async () => {
+  const MAX_TEST_DEPTH = 10;
+  let deepestReached = 0;
+
+  realmRegistry.register(
+    createRealm({
+      id: "realm.recursive",
+      name: "Recursive",
+      status: RealmStatus.IMPLEMENTED,
+      execute: async (input) => {
+        const depth = (input && input.depth) || 0;
+        deepestReached = Math.max(deepestReached, depth);
+        // Nested under the single "result" key on purpose: execute()'s
+        // return object is interpreted by unwrapExecuteOutput.js against a
+        // fixed allowlist of top-level keys (result/truth_state/etc.) — a
+        // sibling field named e.g. "depth" at the top level would be
+        // silently dropped, exactly like the earlier "malicious tool
+        // output" test proved. The actual payload belongs INSIDE "result".
+        if (depth >= MAX_TEST_DEPTH) return { result: { note: "base case", depth } };
+        // Genuine recursion: this realm calls invokePortal on ITSELF again
+        // before returning, exactly the shape a compromised/buggy realm
+        // triggering unbounded self-invocation would take — not merely two
+        // independent parallel calls (already covered above).
+        const child = await invokePortal(
+          createPortalRequest({ portalId: "portal.recursive", request: { depth: depth + 1 }, authorization: grantedAuth })
+        );
+        // Carry the FULL child PortalResult (not just its status string) so
+        // the test below can walk the entire nested chain looking for the
+        // refusal, wherever in the recursion it actually happened — a
+        // refusal is only visible one level up from where it occurred, not
+        // at every ancestor above that.
+        return { result: { note: "recursed", depth, child } };
+      },
+    })
+  );
+  portalRegistry.register(createPortal({ id: "portal.recursive", name: "Recursive Portal", realmId: "realm.recursive", status: PortalStatus.ACTIVE }));
+
+  _setMaxConcurrentPortalExecutionsForTesting(3);
+  try {
+    const res = await invokePortal(createPortalRequest({ portalId: "portal.recursive", request: { depth: 0 }, authorization: grantedAuth }));
+    // The outermost call still returns RESULT (its own execute() did
+    // complete), but recursion never reached the base case at depth 10 —
+    // it was refused well before that once 3 executions were in flight.
+    assert.equal(res.status, PortalResultStatus.RESULT);
+    assert.ok(deepestReached < MAX_TEST_DEPTH, `recursion reached depth ${deepestReached}, expected it to be refused well before ${MAX_TEST_DEPTH}`);
+    // Walk the nested child-result chain: somewhere down it, a level must
+    // have been refused with ERROR ("already in flight") — a refusal is
+    // only visible one level up from where it happened, not propagated to
+    // every ancestor, so the walk must actually descend, not just peek once.
+    let node = res;
+    let sawRefusal = false;
+    for (let hops = 0; hops < MAX_TEST_DEPTH + 1 && node; hops++) {
+      const child = node.result && typeof node.result === "object" ? node.result.child : null;
+      if (!child) break;
+      if (child.status === PortalResultStatus.ERROR) {
+        sawRefusal = true;
+        break;
+      }
+      node = child;
+    }
+    assert.ok(sawRefusal, "expected to find a refused (ERROR, already-in-flight) invocation somewhere in the recursive chain");
+  } finally {
+    _resetMaxConcurrentPortalExecutionsForTesting();
+  }
+});
+
 // --- Adversarial: a realm/tool's own output is DATA, never a new grant ---
 
 test("invokePortal: a realm returning output shaped like an authorization grant (granted/authorized/level fields) never elevates anything — unwrapExecuteOutput only ever copies the known result fields", async () => {
