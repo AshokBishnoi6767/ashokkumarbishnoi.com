@@ -9,6 +9,7 @@
 const { buildPublicSystemPrompt } = require("./publicContext");
 const { pickConnected, safeInvoke } = require("../model/registry");
 const { appendMessage, getConversation } = require("../persistence/store");
+const { attemptNative } = require("./nativeResponder");
 
 const USER_SCOPE = "public:visitor";
 
@@ -18,6 +19,15 @@ async function handleMessage({ message, sessionId }) {
   }
 
   appendMessage(sessionId, USER_SCOPE, { role: "user", content: message });
+
+  // NATIVE_TRINITY is the primary backend: deterministic capabilities are
+  // tried first, before any external model is even selected. An external
+  // provider is only ever reached for what nothing native here can do.
+  const native = await attemptNative(message);
+  if (native.matched) {
+    appendMessage(sessionId, USER_SCOPE, { role: "assistant", content: native.reply });
+    return { status: native.status, reply: native.reply };
+  }
 
   const { provider } = pickConnected();
   const conversation = getConversation(sessionId, USER_SCOPE);

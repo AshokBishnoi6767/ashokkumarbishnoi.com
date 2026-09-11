@@ -246,6 +246,22 @@ test("POST /api/public-ai: valid request returns a structured status, never a fa
   assert.equal(body.status, "UNKNOWN");
 });
 
+test("POST /api/public-ai: NATIVE_TRINITY answers arithmetic through the real math engine — no model provider required", async () => {
+  const res = await post("/api/public-ai", { message: "What is 2 + 2?" });
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.status, "VERIFIED");
+  assert.equal(body.reply, "2 + 2 = 4");
+});
+
+test("POST /api/ai: NATIVE_TRINITY answers arithmetic through the real math engine — no model provider required", async () => {
+  const res = await post("/api/ai", { message: "What is 12 * 4?" }, authHeader());
+  assert.equal(res.status, 200);
+  const body = await res.json();
+  assert.equal(body.status, "VERIFIED");
+  assert.equal(body.reply, "12 * 4 = 48");
+});
+
 // 11. secret isolation
 test("SECURITY: no response body from any endpoint ever contains the owner's bearer token", async () => {
   const responses = await Promise.all([

@@ -20,6 +20,7 @@ const { extractCalendarCreateIntent } = require("../language/calendarIntent");
 const { extractCorrection, extractDecisionStatement, extractPreferenceStatement } = require("../language/memoryIntent");
 const { understand } = require("../language/understanding");
 const { handleIntent } = require("./personalAI");
+const { attemptNative } = require("./nativeResponder");
 const { pickConnected, safeInvoke } = require("../model/registry");
 const { appendMessage, getConversation } = require("../persistence/store");
 const memoryStore = require("../memory/store");
@@ -285,6 +286,15 @@ async function handleMessage({
     const reply = `Could you clarify what you mean? ${basicUnderstanding.ambiguity_reason}`;
     appendMessage(sessionId, userScope, { role: "agent", content: reply, kind: "clarification" });
     return withAttachments({ status: "CLARIFICATION_NEEDED", reason: basicUnderstanding.ambiguity_reason, reply });
+  }
+
+  // NATIVE_TRINITY is the primary backend: deterministic capabilities
+  // (currently: closed-form arithmetic via the real Mathematical Engine)
+  // are tried before any external model is even selected.
+  const native = await attemptNative(message);
+  if (native.matched) {
+    appendMessage(sessionId, userScope, { role: "assistant", content: native.reply });
+    return withAttachments({ status: native.status, reply: native.reply });
   }
 
   // Otherwise: open-ended chat — now with relevant memory actually
