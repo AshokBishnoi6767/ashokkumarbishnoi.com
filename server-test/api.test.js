@@ -485,6 +485,38 @@ test("SEO: no article makes an unverifiable statistic claim — reserved words l
   }
 });
 
+// --- Whitepaper: the-trust-engine is the first real, completed whitepaper
+// (pilot for the content/visual completion phase) — its article CTA must
+// now be genuinely enabled, distinct from the other 49 articles which
+// correctly remain in the honest "not yet available" state above. ---
+
+test("SEO/whitepaper: the-trust-engine's article CTA is enabled and links to a real, indexable whitepaper page — not a fake/disabled download", async () => {
+  const articleRes = await fetch(baseUrl + "/resources/the-trust-engine/");
+  const articleText = await articleRes.text();
+  assert.doesNotMatch(articleText, /Whitepaper in production/);
+  assert.doesNotMatch(articleText, /disabled(=""|)[^>]*portal-deeper/);
+  const linkMatch = articleText.match(/class="portal portal-deeper" href="([^"]+)"/);
+  assert.ok(linkMatch, "expected an enabled portal-deeper link on the article");
+
+  const wpRes = await fetch(baseUrl + linkMatch[1]);
+  assert.equal(wpRes.status, 200);
+  const wpText = await wpRes.text();
+  assert.equal((wpText.match(/<h1>/g) || []).length, 1);
+  assert.match(wpText, /rel="canonical"/);
+  assert.match(wpText, /content="index,follow"/);
+  assert.equal(/href="[^"]*\.pdf"/i.test(wpText), false, "no fake PDF link — this is the honest print-ready HTML path");
+  assert.match(wpText, /whitepaper-print-btn/); // real print/"save as PDF" affordance is present
+  assert.doesNotMatch(wpText, /studies show|research shows|according to a study|statistics show/i);
+});
+
+test("SEO/whitepaper: every OTHER article's CTA remains honestly disabled — the pilot fix must not have accidentally enabled anything else", async () => {
+  for (const slug of SAMPLE_ARTICLE_SLUGS) {
+    const res = await fetch(baseUrl + `/resources/${slug}/`);
+    const text = await res.text();
+    assert.match(text, /Whitepaper in production/, slug);
+  }
+});
+
 // --- Activity/Audit surface ---
 
 test("GET /api/audit: no token is 401 UNAUTHORIZED", async () => {

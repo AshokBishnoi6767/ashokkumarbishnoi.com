@@ -1,0 +1,196 @@
+/* Whitepaper document layout — shared by every real whitepaper page under
+   /resources/whitepapers/<slug>/. Reuses the site's existing tokens
+   (palette, fonts) from styles.css/article.css rather than redefining them.
+   Includes real print rules: this IS the "download" path for now (see the
+   whitepaper README) — a reader prints or "Save as PDF" from the browser,
+   so the print stylesheet below is a first-class part of the deliverable,
+   not an afterthought. */
+
+.whitepaper-doc {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 0 0 80px;
+}
+
+.whitepaper-cover {
+  padding: 56px 0 40px;
+  border-bottom: 1px solid #d8e0d8;
+  margin-bottom: 40px;
+}
+.whitepaper-cover .eyebrow {
+  margin-bottom: 16px;
+}
+.whitepaper-cover h1 {
+  font-size: clamp(2rem, 4.4vw, 3.2rem);
+  line-height: 1.08;
+  letter-spacing: -0.03em;
+  margin: 0 0 18px;
+}
+.whitepaper-cover .whitepaper-dek {
+  font-size: clamp(1.05rem, 1.6vw, 1.25rem);
+  color: #3c463f;
+  max-width: 640px;
+  line-height: 1.5;
+  margin: 0 0 26px;
+}
+.whitepaper-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 18px;
+  font-family: var(--font-mono, "IBM Plex Mono", ui-monospace, monospace);
+  font-size: 0.85rem;
+  color: #5e6b62;
+}
+
+.whitepaper-print-row {
+  margin-top: 24px;
+}
+.whitepaper-print-btn {
+  font-family: var(--font-mono, "IBM Plex Mono", ui-monospace, monospace);
+  font-size: 0.76rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid #171717;
+  background: #171717;
+  color: #f7f8f4;
+  cursor: pointer;
+}
+.whitepaper-print-btn:hover {
+  background: #2f6b4f;
+  border-color: #2f6b4f;
+}
+
+.whitepaper-section {
+  margin: 0 0 48px;
+}
+.whitepaper-section h2 {
+  font-size: clamp(1.4rem, 2.4vw, 1.85rem);
+  letter-spacing: -0.02em;
+  margin: 0 0 20px;
+}
+.whitepaper-section .kicker {
+  font-family: var(--font-mono, "IBM Plex Mono", ui-monospace, monospace);
+  font-size: 0.76rem;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #55705f;
+  margin: 0 0 8px;
+}
+.whitepaper-section p {
+  font-size: 1.05rem;
+  line-height: 1.72;
+  margin: 0 0 20px;
+}
+.whitepaper-section p:last-child {
+  margin-bottom: 0;
+}
+
+.whitepaper-framework-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+  gap: 16px;
+  margin: 0 0 8px;
+}
+.whitepaper-framework-card {
+  padding: 20px 22px;
+  border: 1px solid #d8e0d8;
+  border-radius: 4px;
+  background: #fff;
+}
+.whitepaper-framework-card .card-label {
+  font-family: var(--font-mono, "IBM Plex Mono", ui-monospace, monospace);
+  font-size: 0.7rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a86a1f;
+  margin-bottom: 8px;
+}
+.whitepaper-framework-card.output .card-label {
+  color: #2f6b4f;
+}
+.whitepaper-framework-card h3 {
+  margin: 0 0 8px;
+  font-size: 1.05rem;
+}
+.whitepaper-framework-card p {
+  margin: 0;
+  font-size: 0.94rem;
+  color: #3c463f;
+  line-height: 1.55;
+}
+
+.whitepaper-worksheet {
+  padding: 26px 28px;
+  background: #edf2eb;
+  border-radius: 4px;
+  margin: 0 0 8px;
+}
+.whitepaper-worksheet ol {
+  margin: 0;
+  padding-left: 20px;
+}
+.whitepaper-worksheet li {
+  margin: 12px 0;
+  font-size: 1.02rem;
+  line-height: 1.6;
+}
+
+.whitepaper-source-note {
+  font-family: var(--font-mono, "IBM Plex Mono", ui-monospace, monospace);
+  font-size: 0.8rem;
+  color: #5e6b62;
+  padding-top: 20px;
+  border-top: 1px solid #d8e0d8;
+}
+
+@media (max-width: 760px) {
+  .whitepaper-cover {
+    padding: 40px 0 30px;
+  }
+}
+
+/* ---------- Print / "Save as PDF" ----------
+   This IS the whitepaper's download mechanism until a real PDF-generation
+   pipeline exists (see content/whitepapers/README.md and the session
+   report — no PDF tool is available in this environment/dependency set).
+   A reader uses the browser's own Print > Save as PDF. */
+@media print {
+  .site-header,
+  .whitepaper-print-row,
+  .agent-widget-launcher,
+  #navigator-launcher,
+  #navigator-panel,
+  .article-nav-cta,
+  .talk-to-ashok .portal-talk,
+  .footer {
+    display: none !important;
+  }
+  body {
+    background: #fff;
+  }
+  .whitepaper-doc {
+    max-width: 100%;
+    padding: 0;
+  }
+  .whitepaper-section {
+    break-inside: avoid;
+    page-break-inside: avoid;
+  }
+  .whitepaper-cover {
+    border-bottom: 1px solid #999;
+  }
+  .article-visual {
+    border: 1px solid #999;
+    background: #fff;
+  }
+  a {
+    color: #171717;
+    text-decoration: underline;
+  }
+  @page {
+    margin: 2cm 1.6cm;
+  }
+}

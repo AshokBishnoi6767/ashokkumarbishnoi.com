@@ -132,6 +132,47 @@
           '<line x1="250" y1="88" x2="380" y2="88" stroke="' + BORDER + '" stroke-width="2"/>'
       );
     },
+    // Bespoke, information-bearing diagram for "The Trust Engine" article —
+    // NOT a reused theme icon. Visualizes the article's actual argument:
+    // three specific, hidden inputs (consistency, mistake handling,
+    // transparency) drive Trust, which in turn drives the three visible
+    // metrics (conversion, retention, referral) a dashboard normally
+    // tracks instead of the cause. Text is real content, not decoration —
+    // this is what "communicates information related to the content"
+    // means as distinct from the generic reused concepts above.
+    "trust-engine-framework": function () {
+      var FONT = "IBM Plex Mono, ui-monospace, monospace";
+      var cx = 240, cy = 95, r = 30;
+      var inputs = [
+        { y: 40, label: "Consistency" },
+        { y: 95, label: "Mistake handling" },
+        { y: 150, label: "Transparency" },
+      ];
+      var outputs = [
+        { y: 40, label: "Conversion" },
+        { y: 95, label: "Retention" },
+        { y: 150, label: "Referral" },
+      ];
+      var leftCircleX = 176;
+      var rightCircleX = 304;
+      var parts = "";
+      inputs.forEach(function (n) {
+        parts +=
+          '<line x1="' + (leftCircleX + 4) + '" y1="' + n.y + '" x2="' + (cx - r - 4) + '" y2="' + cy + '" stroke="' + AMBER + '" stroke-width="1.5" stroke-dasharray="1 6" stroke-linecap="round"/>' +
+          '<circle cx="' + leftCircleX + '" cy="' + n.y + '" r="4" fill="' + AMBER + '"/>' +
+          '<text x="8" y="' + (n.y + 4) + '" font-family="' + FONT + '" font-size="12" fill="' + CHARCOAL + '">' + n.label + "</text>";
+      });
+      outputs.forEach(function (n) {
+        parts +=
+          '<line x1="' + (cx + r + 4) + '" y1="' + cy + '" x2="' + (rightCircleX - 4) + '" y2="' + n.y + '" stroke="' + GREEN + '" stroke-width="1.5"/>' +
+          '<circle cx="' + rightCircleX + '" cy="' + n.y + '" r="4" fill="' + GREEN + '"/>' +
+          '<text x="' + (rightCircleX + 8) + '" y="' + (n.y + 4) + '" font-family="' + FONT + '" font-size="12" fill="' + CHARCOAL + '">' + n.label + "</text>";
+      });
+      parts +=
+        '<circle class="av-pulse" cx="' + cx + '" cy="' + cy + '" r="' + r + '" fill="' + CHARCOAL + '"/>' +
+        '<text x="' + cx + '" y="' + (cy + 4) + '" text-anchor="middle" font-family="' + FONT + '" font-size="11" font-weight="700" fill="#f7f8f4">TRUST</text>';
+      return svg(parts, "0 0 480 190");
+    },
   };
 
   function render() {
