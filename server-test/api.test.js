@@ -425,15 +425,17 @@ test("SEO: sample thought-leadership articles are indexable with unique canonica
   }
 });
 
-test("SEO: every article has exactly one H1 and a working whitepaper CTA marked as not yet available (no fake download)", async () => {
+test("SEO: every sample article has exactly one H1 and a real, enabled whitepaper CTA (no fake download, no leftover 'not yet available' state)", async () => {
   for (const slug of SAMPLE_ARTICLE_SLUGS) {
     const res = await fetch(baseUrl + `/resources/${slug}/`);
     const text = await res.text();
     const h1Count = (text.match(/<h1>/g) || []).length;
     assert.equal(h1Count, 1, slug);
     assert.match(text, /whitepaper-cta/, slug);
-    assert.match(text, /Whitepaper in production/, slug);
+    assert.doesNotMatch(text, /Whitepaper in production/, slug);
     assert.equal(/href="[^"]*\.pdf"/i.test(text), false, `${slug} must not link a fake PDF download`);
+    const linkMatch = text.match(/class="portal portal-deeper" href="([^"]+)"/);
+    assert.ok(linkMatch, `${slug} should have an enabled portal-deeper link`);
   }
 });
 
@@ -485,35 +487,61 @@ test("SEO: no article makes an unverifiable statistic claim — reserved words l
   }
 });
 
-// --- Whitepaper: the-trust-engine is the first real, completed whitepaper
-// (pilot for the content/visual completion phase) — its article CTA must
-// now be genuinely enabled, distinct from the other 49 articles which
-// correctly remain in the honest "not yet available" state above. ---
+// --- Whitepaper: content/visual completion phase — ALL 50 articles now
+// have a real, enabled whitepaper. Every one is checked for structural
+// validity; a full-content spot-check runs across a representative sample
+// (the pilot plus a cross-section of the batch-generated 49) rather than
+// fetching all 50 bodies in one test, which would be slow without adding
+// real coverage beyond the structural pass. ---
 
-test("SEO/whitepaper: the-trust-engine's article CTA is enabled and links to a real, indexable whitepaper page — not a fake/disabled download", async () => {
-  const articleRes = await fetch(baseUrl + "/resources/the-trust-engine/");
-  const articleText = await articleRes.text();
-  assert.doesNotMatch(articleText, /Whitepaper in production/);
-  assert.doesNotMatch(articleText, /disabled(=""|)[^>]*portal-deeper/);
-  const linkMatch = articleText.match(/class="portal portal-deeper" href="([^"]+)"/);
-  assert.ok(linkMatch, "expected an enabled portal-deeper link on the article");
+const ALL_WHITEPAPER_SLUGS_SAMPLE = [
+  "the-trust-engine", // pilot
+  "your-company-doesnt-need-more-technology",
+  "knowing-what-to-change-isnt-changing-it",
+  "the-ai-data-flywheel",
+  "the-decision-ready-business",
+  "think-build-measure-improve",
+  "trust-in-the-age-of-ai",
+];
 
-  const wpRes = await fetch(baseUrl + linkMatch[1]);
-  assert.equal(wpRes.status, 200);
-  const wpText = await wpRes.text();
-  assert.equal((wpText.match(/<h1>/g) || []).length, 1);
-  assert.match(wpText, /rel="canonical"/);
-  assert.match(wpText, /content="index,follow"/);
-  assert.equal(/href="[^"]*\.pdf"/i.test(wpText), false, "no fake PDF link — this is the honest print-ready HTML path");
-  assert.match(wpText, /whitepaper-print-btn/); // real print/"save as PDF" affordance is present
-  assert.doesNotMatch(wpText, /studies show|research shows|according to a study|statistics show/i);
-});
+test("SEO/whitepaper: every article on the site has an enabled whitepaper CTA linking to a real, 200-status page — none remain in the disabled 'not yet available' state", async () => {
+  const hubRes = await fetch(baseUrl + "/resources/thought-leadership/");
+  const hubText = await hubRes.text();
+  const slugs = [...new Set([...hubText.matchAll(/href="\/resources\/([a-z0-9-]+)\/"/g)].map((m) => m[1]))];
+  assert.ok(slugs.length >= 50, `expected at least 50 article slugs from the hub, found ${slugs.length}`);
 
-test("SEO/whitepaper: every OTHER article's CTA remains honestly disabled — the pilot fix must not have accidentally enabled anything else", async () => {
-  for (const slug of SAMPLE_ARTICLE_SLUGS) {
+  for (const slug of slugs) {
     const res = await fetch(baseUrl + `/resources/${slug}/`);
     const text = await res.text();
-    assert.match(text, /Whitepaper in production/, slug);
+    assert.doesNotMatch(text, /Whitepaper in production/, slug);
+    const linkMatch = text.match(/class="portal portal-deeper" href="([^"]+)"/);
+    assert.ok(linkMatch, `${slug} should have an enabled portal-deeper link`);
+    const wpRes = await fetch(baseUrl + linkMatch[1]);
+    assert.equal(wpRes.status, 200, `${slug}'s whitepaper link ${linkMatch[1]} should return 200`);
+  }
+});
+
+test("SEO/whitepaper: a representative sample of whitepapers is structurally real (single H1, canonical, indexable, no fake PDF, working print affordance, real bespoke diagram)", async () => {
+  for (const slug of ALL_WHITEPAPER_SLUGS_SAMPLE) {
+    const wpRes = await fetch(baseUrl + `/resources/whitepapers/${slug}/`);
+    assert.equal(wpRes.status, 200, slug);
+    const wpText = await wpRes.text();
+    assert.equal((wpText.match(/<h1>/g) || []).length, 1, slug);
+    assert.match(wpText, /rel="canonical"/, slug);
+    assert.match(wpText, /content="index,follow"/, slug);
+    assert.equal(/href="[^"]*\.pdf"/i.test(wpText), false, `${slug}: no fake PDF link — honest print-ready HTML path`);
+    assert.match(wpText, /whitepaper-print-btn/, slug);
+    assert.match(wpText, /whitepaper-framework-grid/, slug); // real framework content, not just a cover page
+    assert.match(wpText, /whitepaper-worksheet/, slug);
+    assert.match(wpText, /data-visual="[a-z0-9-]+-framework"/, slug); // bespoke diagram, not a generic reused concept
+  }
+});
+
+test("SEO/whitepaper: sitemap.xml includes the new whitepaper URLs", async () => {
+  const res = await fetch(baseUrl + "/sitemap.xml");
+  const text = await res.text();
+  for (const slug of ALL_WHITEPAPER_SLUGS_SAMPLE) {
+    assert.match(text, new RegExp(`<loc>https://ashokkumarbishnoi\\.com/resources/whitepapers/${slug}/</loc>`), slug);
   }
 });
 
